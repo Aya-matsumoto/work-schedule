@@ -278,7 +278,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-800">工程予定表</h1>
         <Link href="/settings" className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
-          ＋ 業務・橋梁を追加
+          ＋ 業務を追加
         </Link>
       </div>
 
@@ -337,6 +337,12 @@ export default function DashboardPage() {
               <span className="font-bold text-gray-700 text-lg">{year}年{monthNum}月</span>
               <button onClick={() => setMonth(nextMonth(month))} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50">翌月 →</button>
               {saving && <span className="text-xs text-gray-400 ml-2">保存中...</span>}
+              <button
+                onClick={() => setShowBridgeForm(true)}
+                className="ml-2 border border-blue-500 text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-50"
+              >
+                ＋ 橋梁を追加
+              </button>
             </div>
             <div className="ml-auto bg-white border border-gray-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
               <button
@@ -417,15 +423,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
-              {/* ＋橋梁を追加（ガント） */}
-              <div className="px-4 py-2 border-t border-gray-100">
-                <button
-                  onClick={() => setShowBridgeForm(true)}
-                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                >
-                  ＋ 橋梁を追加
-                </button>
-              </div>
             </div>
           )}
         </div>
