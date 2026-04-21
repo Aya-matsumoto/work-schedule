@@ -100,9 +100,11 @@ export default function DashboardPage() {
       fetch("/api/staff").then((r) => r.json()),
       fetch("/api/process-types").then((r) => r.json()),
     ]).then(([projectsData, staffData, typesData]) => {
-      setProjects(projectsData);
-      setStaff(staffData);
-      setProcessTypes([...typesData].sort((a: ProcessType, b: ProcessType) => a.order - b.order));
+      setProjects(Array.isArray(projectsData) ? projectsData : []);
+      setStaff(Array.isArray(staffData) ? staffData : []);
+      setProcessTypes(Array.isArray(typesData) ? [...typesData].sort((a: ProcessType, b: ProcessType) => a.order - b.order) : []);
+      setLoading(false);
+    }).catch(() => {
       setLoading(false);
     });
   }, [month]);
