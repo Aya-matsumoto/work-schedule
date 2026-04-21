@@ -116,13 +116,26 @@ export default function SettingsPage() {
   };
   const execImport = async () => {
     setImporting(true);
+    setCsvResult(null);
     try {
-      const res = await fetch("/api/import/csv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: csvPreview }) });
+      const res = await fetch("/api/import/csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: csvPreview }),
+      });
       const result = await res.json();
-      setCsvResult({ ...result, ok: res.ok });
-      if (res.ok) await reload();
+      const finalResult = { ...result, ok: res.ok };
+      setCsvResult(finalResult);
+      if (res.ok) {
+        showMsg("success", `✅ インポート完了：${result.created ?? 0}件 登録しました（スキップ：${result.skipped ?? 0}件）`);
+        await reload();
+      } else {
+        showMsg("error", "❌ インポートに失敗しました");
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
-      setCsvResult({ ok: false, error: "通信エラーが発生しました。再度お試しください。" });
+      showMsg("error", "❌ 通信エラーが発生しました。再度お試しください。");
+      setCsvResult({ ok: false });
     } finally {
       setImporting(false);
     }
