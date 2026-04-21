@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "outDir": ".ts-node-out"
+  },
+  "include": ["prisma/**/*.ts", "app/generated/**/*.ts"],
+  "exclude": ["node_modules"]
+}

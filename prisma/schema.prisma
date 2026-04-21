@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 業務（案件）
+model Project {
+  id         Int       @id @default(autoincrement())
+  name       String
+  client     String?
+  fiscalYear String?
+  deadline   DateTime?
+  note       String?
+  bridges    Bridge[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+// 橋梁
+model Bridge {
+  id             Int             @id @default(autoincrement())
+  projectId      Int
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  serialNo       String?
+  spans          Int?
+  inspectionDate DateTime?
+  inspectionNote String?
+  processes      ProcessRecord[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+// 担当者
+model Staff {
+  id        Int             @id @default(autoincrement())
+  name      String
+  type      String          @default("EMPLOYEE")
+  color     String          @default("#378ADD")
+  processes ProcessRecord[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+// 工程種別マスタ
+model ProcessType {
+  id        Int             @id @default(autoincrement())
+  name      String
+  order     Int
+  color     String          @default("#378ADD")
+  processes ProcessRecord[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+}
+
+// 工程レコード
+model ProcessRecord {
+  id            Int         @id @default(autoincrement())
+  bridgeId      Int
+  bridge        Bridge      @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  processTypeId Int
+  processType   ProcessType @relation(fields: [processTypeId], references: [id])
+  staffId       Int?
+  staff         Staff?      @relation(fields: [staffId], references: [id])
+  status        String      @default("NOT_STARTED")
+  startDate     DateTime?
+  endDate       DateTime?
+  completedDate DateTime?
+  note          String?
+  iteration     Int         @default(1)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
