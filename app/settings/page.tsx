@@ -23,6 +23,7 @@ export default function SettingsPage() {
   const [ptForm, setPtForm] = useState({ name: "", color: "#378ADD" });
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
   const [csvResult, setCsvResult] = useState<any>(null);
+  const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const showMsg = (type: "success" | "error", text: string) => {
@@ -114,10 +115,17 @@ export default function SettingsPage() {
     reader.readAsText(file, "UTF-8");
   };
   const execImport = async () => {
-    const res = await fetch("/api/import/csv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: csvPreview }) });
-    const result = await res.json();
-    setCsvResult(result);
-    if (res.ok) await reload();
+    setImporting(true);
+    try {
+      const res = await fetch("/api/import/csv", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: csvPreview }) });
+      const result = await res.json();
+      setCsvResult({ ...result, ok: res.ok });
+      if (res.ok) await reload();
+    } catch {
+      setCsvResult({ ok: false, error: "通信エラーが発生しました。再度お試しください。" });
+    } finally {
+      setImporting(false);
+    }
   };
 
   const tabs: { key: Tab; label: string }[] = [
@@ -211,8 +219,27 @@ export default function SettingsPage() {
             <div className="bg-white rounded-lg border border-gray-200 p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-bold text-gray-700">プレビュー（{csvPreview.length}件）</h2>
-                <button onClick={execImport} className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700">インポート実行</button>
+                <button
+                  onClick={execImport}
+                  disabled={importing}
+                  className={`px-5 py-2 rounded text-sm font-medium text-white transition-colors ${importing ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
+                >
+                  {importing ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                      </svg>
+                      インポート中...
+                    </span>
+                  ) : "インポート実行"}
+                </button>
               </div>
+              {importing && (
+                <div className="mb-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                  ⏳ データを登録しています。しばらくお待ちください...
+                </div>
+              )}
               <table className="w-full text-sm">
                 <thead className="bg-gray-50"><tr>{["業務名", "元請け", "橋梁名", "整理番号", "径間数"].map((h) => <th key={h} className="text-left px-3 py-2 text-gray-600">{h}</th>)}</tr></thead>
                 <tbody>
@@ -225,16 +252,44 @@ export default function SettingsPage() {
                       <td className="px-3 py-1.5 text-gray-500">{row.spans}</td>
                     </tr>
                   ))}
+                  {csvPreview.length > 20 && (
+                    <tr><td colSpan={5} className="px-3 py-2 text-xs text-gray-400 text-center">他 {csvPreview.length - 20} 件（プレビューは20件まで表示）</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
           )}
           {csvResult && (
-            <div className="bg-white rounded-lg border border-gray-200 p-5">
-              <p className="text-green-600 font-medium">✅ {csvResult.created}件 登録</p>
-              <p className="text-gray-500">スキップ：{csvResult.skipped}件</p>
-              {csvResult.errors?.length > 0 && <ul className="mt-2 text-sm text-red-600">{csvResult.errors.map((e: string, i: number) => <li key={i}>・{e}</li>)}</ul>}
-              <button onClick={() => { setCsvPreview([]); setCsvResult(null); if (fileRef.current) fileRef.current.value = ""; }} className="mt-3 text-sm text-blue-600 hover:underline">別のCSVをインポート</button>
+            <div className={`bg-white rounded-lg border p-5 ${csvResult.ok ? "border-green-300" : "border-red-300"}`}>
+              {csvResult.ok ? (
+                <>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">✅</span>
+                    <p className="text-green-700 font-bold text-lg">インポート完了しました</p>
+                  </div>
+                  <div className="bg-green-50 rounded p-3 text-sm space-y-1">
+                    <p className="text-green-800">✔ 登録件数：<strong>{csvResult.created}件</strong></p>
+                    <p className="text-gray-500">スキップ（重複など）：{csvResult.skipped}件</p>
+                  </div>
+                  {csvResult.errors?.length > 0 && (
+                    <ul className="mt-3 text-sm text-red-600 space-y-1">
+                      {csvResult.errors.map((e: string, i: number) => <li key={i}>・{e}</li>)}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">❌</span>
+                  <p className="text-red-700 font-bold">インポートに失敗しました</p>
+                </div>
+              )}
+              {csvResult.error && <p className="mt-2 text-sm text-red-600">{csvResult.error}</p>}
+              <button
+                onClick={() => { setCsvPreview([]); setCsvResult(null); if (fileRef.current) fileRef.current.value = ""; }}
+                className="mt-4 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
+              >
+                別のCSVをインポート
+              </button>
             </div>
           )}
         </div>
