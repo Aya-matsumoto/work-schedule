@@ -140,15 +140,34 @@ export default function DashboardPage() {
   }) => {
     setSaving(true);
     try {
-      await fetch(`/api/bridges/${data.bridgeId}/processes`, {
+      const res = await fetch(`/api/bridges/${data.bridgeId}/processes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ processTypeId: data.processTypeId, staffId: data.staffId, startDate: data.startDate, endDate: data.endDate, note: data.note }),
       });
+      const created = await res.json();
+      const processType = processTypes.find((pt) => pt.id === data.processTypeId)!;
+      const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
+      const newRecord: ProcessRecord = {
+        id: created.id,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        completedDate: null,
+        status: data.startDate ? "IN_PROGRESS" : "NOT_STARTED",
+        staffId: data.staffId,
+        note: data.note,
+        staff: staffMember,
+        processType,
+      };
+      setProjects((prev) => prev.map((p) => ({
+        ...p,
+        bridges: p.bridges.map((b) =>
+          b.id === data.bridgeId ? { ...b, processes: [...b.processes, newRecord] } : b
+        ),
+      })));
       setCreateTarget(null);
-      loadData();
     } finally { setSaving(false); }
-  }, [loadData]);
+  }, [processTypes, staff]);
 
   const handleBarClick = useCallback((recordId: number, bridge: Bridge, projectName: string) => {
     const record = bridge.processes.find((p) => p.id === recordId);
@@ -158,6 +177,16 @@ export default function DashboardPage() {
 
   const handleDragEnd = useCallback(async (recordId: number, newStart: string, newEnd: string) => {
     setSaving(true);
+    // 即座にガントバーの位置を更新
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.map((b) => ({
+        ...b,
+        processes: b.processes.map((proc) =>
+          proc.id === recordId ? { ...proc, startDate: newStart, endDate: newEnd } : proc
+        ),
+      })),
+    })));
     try {
       const allRecords = projects.flatMap((p) => p.bridges.flatMap((b) => b.processes));
       const rec = allRecords.find((r) => r.id === recordId);
@@ -166,8 +195,8 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ staffId: rec?.staffId ?? null, startDate: newStart, endDate: newEnd, completedDate: rec?.completedDate ?? null, note: rec?.note ?? null, status: rec?.status ?? "IN_PROGRESS" }),
       });
-      loadData();
-    } finally { setSaving(false); }
+    } catch { loadData(); }
+    finally { setSaving(false); }
   }, [projects, loadData]);
 
   // 橋梁を追加
@@ -175,38 +204,48 @@ export default function DashboardPage() {
     if (!selectedProjectId) return;
     setSaving(true);
     try {
-      await fetch(`/api/projects/${selectedProjectId}/bridges`, {
+      const res = await fetch(`/api/projects/${selectedProjectId}/bridges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      const newBridge = await res.json();
+      setProjects((prev) => prev.map((p) =>
+        p.id === selectedProjectId
+          ? { ...p, bridges: [...p.bridges, { ...newBridge, processes: [] }] }
+          : p
+      ));
       setShowBridgeForm(false);
-      loadData();
     } finally { setSaving(false); }
-  }, [selectedProjectId, loadData]);
+  }, [selectedProjectId]);
 
   // 橋梁を削除（単体）
   const handleBridgeDelete = useCallback(async (bridgeId: number, bridgeName: string) => {
     if (!confirm(`「${bridgeName}」を削除しますか？\n（この橋梁の工程データもすべて削除されます）`)) return;
-    setSaving(true);
+    // 即座に画面から削除
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.filter((b) => b.id !== bridgeId),
+    })));
     try {
       await fetch(`/api/bridges/${bridgeId}`, { method: "DELETE" });
-      loadData();
-    } finally { setSaving(false); }
+    } catch { loadData(); }
   }, [loadData]);
 
   // 橋梁を一括削除
   const handleBridgeBulkDelete = useCallback(async () => {
     if (selectedBridgeIds.size === 0) return;
     if (!confirm(`選択した ${selectedBridgeIds.size} 件の橋梁を削除しますか？\n（工程データもすべて削除されます）`)) return;
-    setSaving(true);
+    const idsToDelete = [...selectedBridgeIds];
+    // 即座に画面から削除
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.filter((b) => !idsToDelete.includes(b.id)),
+    })));
+    setSelectedBridgeIds(new Set());
     try {
-      await Promise.all(
-        [...selectedBridgeIds].map((id) => fetch(`/api/bridges/${id}`, { method: "DELETE" }))
-      );
-      setSelectedBridgeIds(new Set());
-      loadData();
-    } finally { setSaving(false); }
+      await Promise.all(idsToDelete.map((id) => fetch(`/api/bridges/${id}`, { method: "DELETE" })));
+    } catch { loadData(); }
   }, [selectedBridgeIds, loadData]);
 
   const handleModalSave = useCallback(async (data: {
@@ -223,10 +262,21 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...data, status }),
       });
+      const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
+      setProjects((prev) => prev.map((p) => ({
+        ...p,
+        bridges: p.bridges.map((b) => ({
+          ...b,
+          processes: b.processes.map((proc) =>
+            proc.id === data.id
+              ? { ...proc, ...data, status, staff: staffMember }
+              : proc
+          ),
+        })),
+      })));
       setEditTarget(null);
-      loadData();
     } finally { setSaving(false); }
-  }, [loadData]);
+  }, [staff]);
 
   // ─── リストビュー用 ────────────────────────────────────────────
 
