@@ -138,7 +138,29 @@ export default function DashboardPage() {
     bridgeId: number; processTypeId: number; staffId: number | null;
     startDate: string | null; endDate: string | null; note: string | null;
   }) => {
-    setSaving(true);
+    const tempId = -Date.now(); // 仮ID
+    const processType = processTypes.find((pt) => pt.id === data.processTypeId)!;
+    const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
+    const tempRecord: ProcessRecord = {
+      id: tempId,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      completedDate: null,
+      status: data.startDate ? "IN_PROGRESS" : "NOT_STARTED",
+      staffId: data.staffId,
+      note: data.note,
+      staff: staffMember,
+      processType,
+    };
+    // 即座にモーダルを閉じて仮レコードを画面に追加
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.map((b) =>
+        b.id === data.bridgeId ? { ...b, processes: [...b.processes, tempRecord] } : b
+      ),
+    })));
+    setCreateTarget(null);
+    // バックグラウンドでDBに保存し、仮IDを本物のIDに差し替え
     try {
       const res = await fetch(`/api/bridges/${data.bridgeId}/processes`, {
         method: "POST",
@@ -146,28 +168,15 @@ export default function DashboardPage() {
         body: JSON.stringify({ processTypeId: data.processTypeId, staffId: data.staffId, startDate: data.startDate, endDate: data.endDate, note: data.note }),
       });
       const created = await res.json();
-      const processType = processTypes.find((pt) => pt.id === data.processTypeId)!;
-      const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
-      const newRecord: ProcessRecord = {
-        id: created.id,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        completedDate: null,
-        status: data.startDate ? "IN_PROGRESS" : "NOT_STARTED",
-        staffId: data.staffId,
-        note: data.note,
-        staff: staffMember,
-        processType,
-      };
       setProjects((prev) => prev.map((p) => ({
         ...p,
-        bridges: p.bridges.map((b) =>
-          b.id === data.bridgeId ? { ...b, processes: [...b.processes, newRecord] } : b
-        ),
+        bridges: p.bridges.map((b) => ({
+          ...b,
+          processes: b.processes.map((proc) => proc.id === tempId ? { ...proc, id: created.id } : proc),
+        })),
       })));
-      setCreateTarget(null);
-    } finally { setSaving(false); }
-  }, [processTypes, staff]);
+    } catch { loadData(); }
+  }, [processTypes, staff, loadData]);
 
   const handleBarClick = useCallback((recordId: number, bridge: Bridge, projectName: string) => {
     const record = bridge.processes.find((p) => p.id === recordId);
@@ -252,31 +261,30 @@ export default function DashboardPage() {
     id: number; staffId: number | null; startDate: string | null;
     endDate: string | null; completedDate: string | null; note: string | null;
   }) => {
-    setSaving(true);
+    let status = "NOT_STARTED";
+    if (data.completedDate) status = "COMPLETED";
+    else if (data.startDate) status = "IN_PROGRESS";
+    const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
+    // 即座にモーダルを閉じて画面を更新
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.map((b) => ({
+        ...b,
+        processes: b.processes.map((proc) =>
+          proc.id === data.id ? { ...proc, ...data, status, staff: staffMember } : proc
+        ),
+      })),
+    })));
+    setEditTarget(null);
+    // バックグラウンドでDBに保存
     try {
-      let status = "NOT_STARTED";
-      if (data.completedDate) status = "COMPLETED";
-      else if (data.startDate) status = "IN_PROGRESS";
       await fetch(`/api/processes/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...data, status }),
       });
-      const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
-      setProjects((prev) => prev.map((p) => ({
-        ...p,
-        bridges: p.bridges.map((b) => ({
-          ...b,
-          processes: b.processes.map((proc) =>
-            proc.id === data.id
-              ? { ...proc, ...data, status, staff: staffMember }
-              : proc
-          ),
-        })),
-      })));
-      setEditTarget(null);
-    } finally { setSaving(false); }
-  }, [staff]);
+    } catch { loadData(); }
+  }, [staff, loadData]);
 
   // ─── リストビュー用 ────────────────────────────────────────────
 
