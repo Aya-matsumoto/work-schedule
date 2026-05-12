@@ -104,7 +104,14 @@ export default function SettingsPage() {
     const lines = text.trim().split("\n");
     return lines.slice(1).map((line) => {
       const cols = line.split(",").map((c) => c.trim());
-      return { projectName: cols[0], client: cols[1], bridgeName: cols[2], serialNo: cols[3], spans: cols[4] };
+      return {
+        projectName: cols[0],
+        client: cols[1],
+        bridgeName: cols[2],
+        serialNo: cols[3],
+        spans: cols[4],
+        inspectionDate: cols[5] ?? "",
+      };
     }).filter((r) => r.projectName && r.bridgeName);
   };
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,7 +134,11 @@ export default function SettingsPage() {
       const finalResult = { ...result, ok: res.ok };
       setCsvResult(finalResult);
       if (res.ok) {
-        showMsg("success", `✅ インポート完了：${result.created ?? 0}件 登録しました（スキップ：${result.skipped ?? 0}件）`);
+        const parts = [];
+        if ((result.created ?? 0) > 0) parts.push(`新規登録 ${result.created}件`);
+        if ((result.updated ?? 0) > 0) parts.push(`更新 ${result.updated}件`);
+        if ((result.skipped ?? 0) > 0) parts.push(`スキップ ${result.skipped}件`);
+        showMsg("success", `✅ インポート完了：${parts.join("、") || "対象なし"}`);
         await reload();
       } else {
         showMsg("error", "❌ インポートに失敗しました");
@@ -225,7 +236,8 @@ export default function SettingsPage() {
         <div className="space-y-5">
           <div className="bg-white rounded-lg border border-gray-200 p-5">
             <h2 className="font-bold text-gray-700 mb-2">CSVファイルをアップロード</h2>
-            <p className="text-sm text-gray-500 mb-3">形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,径間数</code>（1行目はヘッダー）</p>
+            <p className="text-sm text-gray-500 mb-1">形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,径間数,点検完了日</code>（1行目はヘッダー）</p>
+            <p className="text-xs text-gray-400 mb-3">※ 点検完了日は YYYY-MM-DD または YYYY/MM/DD 形式。省略可。既に登録済みの橋梁は上書き更新されます。</p>
             <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="text-sm" />
           </div>
           {csvPreview.length > 0 && !csvResult && (
@@ -254,7 +266,7 @@ export default function SettingsPage() {
                 </div>
               )}
               <table className="w-full text-sm">
-                <thead className="bg-gray-50"><tr>{["業務名", "元請け", "橋梁名", "整理番号", "径間数"].map((h) => <th key={h} className="text-left px-3 py-2 text-gray-600">{h}</th>)}</tr></thead>
+                <thead className="bg-gray-50"><tr>{["業務名", "元請け", "橋梁名", "整理番号", "径間数", "点検完了日"].map((h) => <th key={h} className="text-left px-3 py-2 text-gray-600">{h}</th>)}</tr></thead>
                 <tbody>
                   {csvPreview.slice(0, 20).map((row, i) => (
                     <tr key={i} className="border-t border-gray-100">
@@ -263,10 +275,11 @@ export default function SettingsPage() {
                       <td className="px-3 py-1.5">{row.bridgeName}</td>
                       <td className="px-3 py-1.5 text-gray-500">{row.serialNo}</td>
                       <td className="px-3 py-1.5 text-gray-500">{row.spans}</td>
+                      <td className="px-3 py-1.5 text-gray-500">{row.inspectionDate || "-"}</td>
                     </tr>
                   ))}
                   {csvPreview.length > 20 && (
-                    <tr><td colSpan={5} className="px-3 py-2 text-xs text-gray-400 text-center">他 {csvPreview.length - 20} 件（プレビューは20件まで表示）</td></tr>
+                    <tr><td colSpan={6} className="px-3 py-2 text-xs text-gray-400 text-center">他 {csvPreview.length - 20} 件（プレビューは20件まで表示）</td></tr>
                   )}
                 </tbody>
               </table>
@@ -281,8 +294,13 @@ export default function SettingsPage() {
                     <p className="text-green-700 font-bold text-lg">インポート完了しました</p>
                   </div>
                   <div className="bg-green-50 rounded p-3 text-sm space-y-1">
-                    <p className="text-green-800">✔ 登録件数：<strong>{csvResult.created}件</strong></p>
-                    <p className="text-gray-500">スキップ（重複など）：{csvResult.skipped}件</p>
+                    <p className="text-green-800">✔ 新規登録：<strong>{csvResult.created}件</strong></p>
+                    {csvResult.updated > 0 && (
+                      <p className="text-blue-700">✔ 上書き更新：<strong>{csvResult.updated}件</strong></p>
+                    )}
+                    {csvResult.skipped > 0 && (
+                      <p className="text-gray-500">スキップ：{csvResult.skipped}件</p>
+                    )}
                   </div>
                   {csvResult.errors?.length > 0 && (
                     <ul className="mt-3 text-sm text-red-600 space-y-1">
