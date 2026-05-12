@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "bridge-app",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3000
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev"],
+      "port": 3001,
+      "autoPort": true
     }
   ]
 }

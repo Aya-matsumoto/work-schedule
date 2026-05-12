@@ -8,13 +8,10 @@ export async function GET(req: NextRequest) {
     if (!monthStr) return NextResponse.json({ error: "月を指定してください" }, { status: 400 });
 
     const [year, month] = monthStr.split("-").map(Number);
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0, 23, 59, 59);
 
     const projects = await prisma.project.findMany({
       orderBy: { createdAt: "desc" },
       include: {
-        // 業務に直接紐づく工程
         processes: {
           include: { processType: true, staff: true },
           orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
@@ -25,6 +22,10 @@ export async function GET(req: NextRequest) {
             processes: {
               include: { processType: true, staff: true },
               orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
+            },
+            // 自動割り振り結果も含める
+            assignments: {
+              include: { staff: true },
             },
           },
         },

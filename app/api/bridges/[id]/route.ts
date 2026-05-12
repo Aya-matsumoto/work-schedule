@@ -31,15 +31,17 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { name, serialNo, spans, inspectionDate, inspectionNote } = await req.json();
+    const { name, serialNo, spans, inspectionDate, inspectionNote, spanCount, spanCoefficient } = await req.json();
     const bridge = await prisma.bridge.update({
       where: { id: parseInt(params.id) },
       data: {
-        name,
-        serialNo,
-        spans: spans ? parseInt(spans) : null,
-        inspectionDate: inspectionDate ? new Date(inspectionDate) : null,
-        inspectionNote,
+        ...(name !== undefined && { name }),
+        ...(serialNo !== undefined && { serialNo }),
+        ...(spans !== undefined && { spans: spans ? parseInt(spans) : null }),
+        ...(inspectionDate !== undefined && { inspectionDate: inspectionDate ? new Date(inspectionDate) : null }),
+        ...(inspectionNote !== undefined && { inspectionNote }),
+        ...(spanCount !== undefined && { spanCount: parseInt(spanCount) }),
+        ...(spanCoefficient !== undefined && { spanCoefficient: parseFloat(spanCoefficient) }),
       },
     });
     return NextResponse.json(bridge);

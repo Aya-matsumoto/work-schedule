@@ -9,42 +9,62 @@ datasource db {
 
 // 業務（案件）
 model Project {
-  id         Int              @id @default(autoincrement())
-  name       String
-  client     String?
-  fiscalYear String?
-  deadline   DateTime?
-  note       String?
-  bridges    Bridge[]
-  processes  ProcessRecord[]
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  id               Int              @id @default(autoincrement())
+  name             String
+  client           String?
+  fiscalYear       String?
+  deadline         DateTime?
+  note             String?
+  bridges          Bridge[]
+  processes        ProcessRecord[]
+  staffAssignments ProjectStaff[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }
 
 // 橋梁
 model Bridge {
-  id             Int             @id @default(autoincrement())
-  projectId      Int
-  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name           String
-  serialNo       String?
-  spans          Int?
-  inspectionDate DateTime?
-  inspectionNote String?
-  processes      ProcessRecord[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id               Int               @id @default(autoincrement())
+  projectId        Int
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name             String
+  serialNo         String?
+  spans            Int?
+  spanCount        Int               @default(1)
+  spanCoefficient  Float             @default(0.5)
+  inspectionDate   DateTime?
+  inspectionNote   String?
+  processes        ProcessRecord[]
+  assignments      BridgeAssignment[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 // 担当者
 model Staff {
-  id        Int             @id @default(autoincrement())
-  name      String
-  type      String          @default("EMPLOYEE")
-  color     String          @default("#378ADD")
-  processes ProcessRecord[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id                 Int               @id @default(autoincrement())
+  name               String
+  type               String            @default("EMPLOYEE")
+  color              String            @default("#378ADD")
+  processes          ProcessRecord[]
+  shifts             StaffShift[]
+  assignments        BridgeAssignment[]
+  projectAssignments ProjectStaff[]
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+// 業務別担当者
+model ProjectStaff {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  staffId   Int
+  staff     Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  priority  Int      @default(1)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, staffId])
 }
 
 // 工程種別マスタ
@@ -77,4 +97,55 @@ model ProcessRecord {
   iteration     Int          @default(1)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+}
+
+// 担当者シフト・勤務時間
+model StaffShift {
+  id                 Int                  @id @default(autoincrement())
+  staffId            Int
+  staff              Staff                @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  defaultHoursPerDay Float                @default(8)
+  weekPattern        Json
+  validFrom          DateTime
+  validTo            DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  overrides          StaffShiftOverride[]
+}
+
+// 勤務時間の個別変更
+model StaffShiftOverride {
+  id          Int        @id @default(autoincrement())
+  shiftId     Int
+  shift       StaffShift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  date        DateTime
+  hoursPerDay Float
+  note        String?
+  createdAt   DateTime   @default(now())
+}
+
+// システム設定
+model SystemSettings {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+// 橋梁担当割り当て
+model BridgeAssignment {
+  id                 Int       @id @default(autoincrement())
+  bridgeId           Int
+  bridge             Bridge    @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  staffId            Int
+  staff              Staff     @relation(fields: [staffId], references: [id])
+  fiscalYear         Int
+  priority           Int       @default(1)
+  inspectionDoneDate DateTime?
+  startDate          DateTime?
+  endDate            DateTime?
+  isManual           Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }

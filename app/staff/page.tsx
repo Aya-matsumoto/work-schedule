@@ -16,11 +16,20 @@ interface ProcessRecord {
   project: { id: number; name: string } | null;
 }
 
+interface StaffAssignment {
+  id: number;
+  startDate: string | null;
+  endDate: string | null;
+  isManual: boolean;
+  bridge: { id: number; name: string; project: { id: number; name: string } };
+}
+
 interface StaffWithSchedule {
   id: number;
   name: string;
   color: string;
   processes: ProcessRecord[];
+  assignments: StaffAssignment[];
 }
 
 interface Bridge { id: number; name: string; }
@@ -187,6 +196,21 @@ export default function StaffPage() {
                       style={{ height: 40 }}
                       onClick={(e) => handleGridClick(e, s.id, s.name)}
                     >
+                      {/* 自動割り振りバー */}
+                      {s.assignments?.map((a) => (
+                        <GanttBar
+                          key={`assign-${a.id}`}
+                          id={a.id}
+                          startDate={a.startDate}
+                          endDate={a.endDate}
+                          color={s.color}
+                          processName="工数割り振り"
+                          customLabel={`📋 ${a.bridge.name}${a.isManual ? " ✏" : ""}`}
+                          year={year}
+                          month={monthNum}
+                        />
+                      ))}
+                      {/* 工程バー */}
                       {s.processes.map((proc) => (
                         <GanttBar
                           key={proc.id}
@@ -201,7 +225,7 @@ export default function StaffPage() {
                           month={monthNum}
                         />
                       ))}
-                      {s.processes.length === 0 && (
+                      {s.processes.length === 0 && !s.assignments?.length && (
                         <div className="absolute inset-0 flex items-center px-3">
                           <span className="text-xs text-gray-300">クリックして予定を追加</span>
                         </div>

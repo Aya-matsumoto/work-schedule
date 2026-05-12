@@ -28,6 +28,19 @@ export async function GET(req: NextRequest) {
             project: true,
           },
         },
+        // 自動割り振り結果も含める
+        assignments: {
+          where: {
+            OR: [
+              { startDate: { gte: monthStart, lte: monthEnd } },
+              { endDate: { gte: monthStart, lte: monthEnd } },
+              { startDate: { lte: monthStart }, endDate: { gte: monthEnd } },
+            ],
+          },
+          include: {
+            bridge: { include: { project: true } },
+          },
+        },
       },
     });
     return NextResponse.json(staff);

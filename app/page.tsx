@@ -8,6 +8,7 @@ import GanttBar from "@/components/GanttBar";
 import ProcessEditModal from "@/components/ProcessEditModal";
 import ProcessCreateModal from "@/components/ProcessCreateModal";
 import BridgeFormModal from "@/components/BridgeFormModal";
+import AssignmentEditModal from "@/components/AssignmentEditModal";
 import StatusBadge from "@/components/StatusBadge";
 import {
   formatDate, getDaysInMonth, currentMonth, prevMonth, nextMonth,
@@ -28,6 +29,15 @@ interface ProcessRecord {
   processType: { id: number; name: string; order: number; color: string };
 }
 
+interface BridgeAssignment {
+  id: number;
+  staffId: number;
+  startDate: string | null;
+  endDate: string | null;
+  isManual: boolean;
+  staff: { id: number; name: string; color: string };
+}
+
 interface Bridge {
   id: number;
   name: string;
@@ -35,6 +45,7 @@ interface Bridge {
   spans: number | null;
   inspectionDate: string | null;
   processes: ProcessRecord[];
+  assignments: BridgeAssignment[];
 }
 
 interface Project {
@@ -59,6 +70,12 @@ interface EditTarget {
   projectName: string;
 }
 
+interface AssignmentEditTarget {
+  assignment: BridgeAssignment;
+  bridgeName: string;
+  projectName: string;
+}
+
 interface CreateTarget {
   projectId: number;
   projectName: string;
@@ -79,6 +96,7 @@ export default function DashboardPage() {
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set());
   const [view, setView] = useState<"gantt" | "list">("gantt");
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [assignmentEditTarget, setAssignmentEditTarget] = useState<AssignmentEditTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [filterTypeId, setFilterTypeId] = useState<number | null>(null);
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
@@ -224,6 +242,83 @@ export default function DashboardPage() {
     if (!record) return;
     setEditTarget({ record, bridgeName, projectName });
   }, []);
+
+  // 自動割り振りバー クリック → 編集モーダル
+  const handleAssignmentBarClick = useCallback((
+    assignmentId: number,
+    bridge: Bridge,
+    projectName: string
+  ) => {
+    const assignment = bridge.assignments?.find((a) => a.id === assignmentId);
+    if (!assignment) return;
+    setAssignmentEditTarget({ assignment, bridgeName: bridge.name, projectName });
+  }, []);
+
+  // 自動割り振りバー ドラッグ → 日程更新
+  const handleAssignmentDragEnd = useCallback(async (assignmentId: number, newStart: string, newEnd: string) => {
+    setSaving(true);
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.map((b) => ({
+        ...b,
+        assignments: b.assignments?.map((a) =>
+          a.id === assignmentId ? { ...a, startDate: newStart, endDate: newEnd, isManual: true } : a
+        ),
+      })),
+    })));
+    try {
+      await fetch(`/api/assignments/${assignmentId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: newStart, endDate: newEnd }),
+      });
+    } catch { loadData(); }
+    finally { setSaving(false); }
+  }, [loadData]);
+
+  // 割り振り編集モーダル 保存
+  const handleAssignmentSave = useCallback(async (data: {
+    id: number;
+    staffId: number;
+    startDate: string | null;
+    endDate: string | null;
+  }) => {
+    const staffMember = staff.find((s) => s.id === data.staffId);
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.map((b) => ({
+        ...b,
+        assignments: b.assignments?.map((a) =>
+          a.id === data.id
+            ? { ...a, ...data, isManual: true, staff: staffMember ? { ...staffMember, color: a.staff.color } : a.staff }
+            : a
+        ),
+      })),
+    })));
+    setAssignmentEditTarget(null);
+    try {
+      await fetch(`/api/assignments/${data.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId: data.staffId, startDate: data.startDate, endDate: data.endDate }),
+      });
+    } catch { loadData(); }
+  }, [staff, loadData]);
+
+  // 割り振り編集モーダル 削除
+  const handleAssignmentDelete = useCallback(async (assignmentId: number) => {
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      bridges: p.bridges.map((b) => ({
+        ...b,
+        assignments: b.assignments?.filter((a) => a.id !== assignmentId),
+      })),
+    })));
+    setAssignmentEditTarget(null);
+    try {
+      await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+    } catch { loadData(); }
+  }, [loadData]);
 
   const handleDragEnd = useCallback(async (recordId: number, newStart: string, newEnd: string) => {
     setSaving(true);
@@ -540,6 +635,24 @@ export default function DashboardPage() {
                                 style={{ height: 36 }}
                                 onClick={(e) => handleGridClick(e, { projectId: project.id, projectName: project.name, bridgeId: bridge.id, bridgeName: bridge.name })}
                               >
+                                {/* 自動割り振りバー */}
+                                {bridge.assignments?.map((a) => (
+                                  <GanttBar
+                                    key={`assign-${a.id}`}
+                                    id={a.id}
+                                    startDate={a.startDate}
+                                    endDate={a.endDate}
+                                    color={a.staff.color}
+                                    staffName={a.staff.name}
+                                    processName="工数割り振り"
+                                    customLabel={`📋 ${a.staff.name}${a.isManual ? " ✏" : ""}`}
+                                    year={year}
+                                    month={monthNum}
+                                    onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
+                                    onClick={(aid) => handleAssignmentBarClick(aid, bridge, project.name)}
+                                  />
+                                ))}
+                                {/* 工程バー */}
                                 {bridge.processes
                                   .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
                                   .map((proc) => (
@@ -705,7 +818,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 編集モーダル */}
+      {/* 工程編集モーダル */}
       {editTarget && (
         <ProcessEditModal
           record={editTarget.record}
@@ -714,6 +827,19 @@ export default function DashboardPage() {
           projectName={editTarget.projectName}
           onSave={handleModalSave}
           onClose={() => setEditTarget(null)}
+        />
+      )}
+
+      {/* 割り振り編集モーダル */}
+      {assignmentEditTarget && (
+        <AssignmentEditModal
+          assignment={assignmentEditTarget.assignment}
+          bridgeName={assignmentEditTarget.bridgeName}
+          projectName={assignmentEditTarget.projectName}
+          staff={staff}
+          onSave={handleAssignmentSave}
+          onDelete={handleAssignmentDelete}
+          onClose={() => setAssignmentEditTarget(null)}
         />
       )}
 
