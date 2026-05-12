@@ -14,6 +14,11 @@ export async function GET(req: NextRequest) {
     const projects = await prisma.project.findMany({
       orderBy: { createdAt: "desc" },
       include: {
+        // 業務に直接紐づく工程
+        processes: {
+          include: { processType: true, staff: true },
+          orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
+        },
         bridges: {
           orderBy: { serialNo: "asc" },
           include: {

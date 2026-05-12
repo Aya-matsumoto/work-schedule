@@ -1,22 +1,21 @@
 "use client";
 import { useState } from "react";
 
-interface Staff { id: number; name: string; }
+interface Bridge { id: number; name: string; }
+interface Project { id: number; name: string; bridges: Bridge[]; }
 interface ProcessType { id: number; name: string; color: string; order: number; }
 
 interface Props {
-  projectId: number;
-  projectName: string;
-  bridgeId?: number;
-  bridgeName?: string;
-  staff: Staff[];
+  staffId: number;
+  staffName: string;
+  projects: Project[];
   processTypes: ProcessType[];
   initialDate?: string;
   onSave: (data: {
-    projectId: number;
+    staffId: number;
+    projectId?: number;
     bridgeId?: number;
     processTypeId: number;
-    staffId: number | null;
     startDate: string | null;
     endDate: string | null;
     note: string | null;
@@ -24,33 +23,37 @@ interface Props {
   onClose: () => void;
 }
 
-export default function ProcessCreateModal({
-  projectId, projectName, bridgeId, bridgeName, staff, processTypes, initialDate, onSave, onClose,
+export default function StaffProcessCreateModal({
+  staffId, staffName, projects, processTypes, initialDate, onSave, onClose,
 }: Props) {
   const [form, setForm] = useState({
+    projectId: "",
+    bridgeId: "",
     processTypeId: processTypes[0]?.id.toString() ?? "",
-    staffId: "",
     startDate: initialDate ?? "",
     endDate: "",
     note: "",
   });
 
+  const selectedProject = projects.find((p) => p.id.toString() === form.projectId);
   const selectedType = processTypes.find((pt) => pt.id.toString() === form.processTypeId);
 
+  const handleProjectChange = (val: string) => {
+    setForm((f) => ({ ...f, projectId: val, bridgeId: "" }));
+  };
+
   const handleSave = () => {
-    if (!form.processTypeId) return;
+    if (!form.processTypeId || !form.projectId) return;
     onSave({
-      projectId,
-      bridgeId,
+      staffId,
+      projectId: parseInt(form.projectId),
+      bridgeId: form.bridgeId ? parseInt(form.bridgeId) : undefined,
       processTypeId: parseInt(form.processTypeId),
-      staffId: form.staffId ? parseInt(form.staffId) : null,
       startDate: form.startDate || null,
       endDate: form.endDate || null,
       note: form.note || null,
     });
   };
-
-  const targetLabel = bridgeName ?? "業務全体";
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={onClose}>
@@ -58,14 +61,45 @@ export default function ProcessCreateModal({
         {/* ヘッダー */}
         <div className="px-5 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <span className="font-bold text-gray-800 text-sm">工程を追加</span>
-            <p className="text-xs text-gray-400 mt-0.5">{projectName} ／ {targetLabel}</p>
+            <span className="font-bold text-gray-800 text-sm">予定を追加</span>
+            <p className="text-xs text-gray-400 mt-0.5">担当者：{staffName}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
         </div>
 
         {/* フォーム */}
         <div className="p-5 space-y-3">
+          {/* 業務選択 */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">業務 <span className="text-red-500">*</span></label>
+            <select
+              value={form.projectId}
+              onChange={(e) => handleProjectChange(e.target.value)}
+              className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
+            >
+              <option value="">選択してください</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 橋梁選択（任意） */}
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">橋梁（任意）</label>
+            <select
+              value={form.bridgeId}
+              onChange={(e) => setForm((f) => ({ ...f, bridgeId: e.target.value }))}
+              disabled={!selectedProject}
+              className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full disabled:bg-gray-50 disabled:text-gray-400"
+            >
+              <option value="">業務全体（橋梁指定なし）</option>
+              {(selectedProject?.bridges ?? []).map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+
           {/* 工程選択 */}
           <div>
             <label className="block text-xs text-gray-500 mb-1">工程 <span className="text-red-500">*</span></label>
@@ -83,19 +117,6 @@ export default function ProcessCreateModal({
                 {selectedType.name}
               </span>
             )}
-          </div>
-
-          {/* 担当者 */}
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">担当者</label>
-            <select
-              value={form.staffId}
-              onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))}
-              className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
-            >
-              <option value="">未定</option>
-              {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
           </div>
 
           {/* 日程 */}
@@ -138,7 +159,7 @@ export default function ProcessCreateModal({
           <button onClick={onClose} className="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50">キャンセル</button>
           <button
             onClick={handleSave}
-            disabled={!form.processTypeId}
+            disabled={!form.processTypeId || !form.projectId}
             className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-40"
           >
             登録

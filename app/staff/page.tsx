@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import GanttGrid from "@/components/GanttGrid";
 import GanttBar from "@/components/GanttBar";
-import { currentMonth, prevMonth, nextMonth, parseYearMonth, formatDate } from "@/lib/utils";
+import StaffProcessCreateModal from "@/components/StaffProcessCreateModal";
+import { currentMonth, prevMonth, nextMonth, parseYearMonth } from "@/lib/utils";
 
 interface ProcessRecord {
   id: number;
@@ -11,7 +12,8 @@ interface ProcessRecord {
   endDate: string | null;
   completedDate: string | null;
   processType: { name: string; color: string };
-  bridge: { id: number; name: string; project: { name: string } };
+  bridge: { id: number; name: string; project: { id: number; name: string } } | null;
+  project: { id: number; name: string } | null;
 }
 
 interface StaffWithSchedule {
@@ -21,20 +23,104 @@ interface StaffWithSchedule {
   processes: ProcessRecord[];
 }
 
+interface Bridge { id: number; name: string; }
+interface Project { id: number; name: string; bridges: Bridge[]; }
+interface ProcessType { id: number; name: string; color: string; order: number; }
+
+interface CreateTarget {
+  staffId: number;
+  staffName: string;
+  initialDate?: string;
+}
+
 export default function StaffPage() {
   const [month, setMonth] = useState(currentMonth());
   const [checkDate, setCheckDate] = useState("");
   const [staffList, setStaffList] = useState<StaffWithSchedule[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [processTypes, setProcessTypes] = useState<ProcessType[]>([]);
   const [loading, setLoading] = useState(false);
+  const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
 
   const { year, month: monthNum } = parseYearMonth(month);
+  const daysInMonth = new Date(year, monthNum, 0).getDate();
 
-  useEffect(() => {
+  const loadSchedule = useCallback(() => {
     setLoading(true);
     fetch(`/api/staff/schedule?month=${month}`)
       .then((r) => r.json())
-      .then((data) => { setStaffList(data); setLoading(false); });
+      .then((data) => { setStaffList(Array.isArray(data) ? data : []); setLoading(false); });
   }, [month]);
+
+  useEffect(() => { loadSchedule(); }, [loadSchedule]);
+
+  // 業務・工程種別を初回ロード
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/gantt/dashboard?month=${month}`).then((r) => r.json()),
+      fetch("/api/process-types").then((r) => r.json()),
+    ]).then(([projectsData, typesData]) => {
+      if (Array.isArray(projectsData)) {
+        setProjects(projectsData.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          bridges: p.bridges?.map((b: any) => ({ id: b.id, name: b.name })) ?? [],
+        })));
+      }
+      if (Array.isArray(typesData)) {
+        setProcessTypes([...typesData].sort((a, b) => a.order - b.order));
+      }
+    });
+  }, [month]);
+
+  // ガントグリッドのクリック → クリックした日付を計算
+  const handleGridClick = useCallback((
+    e: React.MouseEvent<HTMLDivElement>,
+    staffId: number,
+    staffName: string
+  ) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relativeX = e.clientX - rect.left;
+    const dayFraction = relativeX / rect.width;
+    const dayIndex = Math.floor(dayFraction * daysInMonth);
+    const clickedDate = new Date(year, monthNum - 1, dayIndex + 1);
+    const yyyy = clickedDate.getFullYear();
+    const mm = String(clickedDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(clickedDate.getDate()).padStart(2, "0");
+    setCreateTarget({ staffId, staffName, initialDate: `${yyyy}-${mm}-${dd}` });
+  }, [year, monthNum, daysInMonth]);
+
+  // 予定を登録
+  const handleCreateSave = useCallback(async (data: {
+    staffId: number;
+    projectId?: number;
+    bridgeId?: number;
+    processTypeId: number;
+    startDate: string | null;
+    endDate: string | null;
+    note: string | null;
+  }) => {
+    setCreateTarget(null);
+    try {
+      const url = data.bridgeId
+        ? `/api/bridges/${data.bridgeId}/processes`
+        : `/api/projects/${data.projectId}/processes`;
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          processTypeId: data.processTypeId,
+          staffId: data.staffId,
+          startDate: data.startDate,
+          endDate: data.endDate,
+          note: data.note,
+        }),
+      });
+      loadSchedule();
+    } catch {
+      loadSchedule();
+    }
+  }, [loadSchedule]);
 
   // 空き確認：指定日に予定がない担当者を判定
   function isAvailable(s: StaffWithSchedule): boolean {
@@ -46,6 +132,12 @@ export default function StaffPage() {
       const end = p.endDate ? new Date(p.endDate) : start;
       return d < start || d > end;
     });
+  }
+
+  // ガントバーのラベル（業務名/工程名）
+  function getLabel(proc: ProcessRecord): string {
+    const projectName = proc.bridge?.project?.name ?? proc.project?.name ?? "";
+    return `${projectName} / ${proc.processType.name}`;
   }
 
   return (
@@ -64,6 +156,8 @@ export default function StaffPage() {
           <input type="date" value={checkDate} onChange={(e) => setCheckDate(e.target.value)} className="border border-gray-300 rounded px-3 py-1 text-sm" />
           {checkDate && <button onClick={() => setCheckDate("")} className="text-sm text-gray-400 hover:text-gray-600">クリア</button>}
         </div>
+
+        <p className="text-xs text-gray-400 ml-2">ガントの空欄をクリックすると予定を追加できます</p>
       </div>
 
       {loading ? (
@@ -88,7 +182,11 @@ export default function StaffPage() {
                 {/* ガントチャート */}
                 <div className="flex-1 border-l border-gray-100">
                   <GanttGrid year={year} month={monthNum}>
-                    <div className="relative" style={{ height: 40 }}>
+                    <div
+                      className="relative cursor-cell"
+                      style={{ height: 40 }}
+                      onClick={(e) => handleGridClick(e, s.id, s.name)}
+                    >
                       {s.processes.map((proc) => (
                         <GanttBar
                           key={proc.id}
@@ -98,14 +196,14 @@ export default function StaffPage() {
                           completedDate={proc.completedDate}
                           color={proc.processType.color}
                           processName={proc.processType.name}
-                          customLabel={`${proc.bridge.project.name} / ${proc.processType.name}`}
+                          customLabel={getLabel(proc)}
                           year={year}
                           month={monthNum}
                         />
                       ))}
                       {s.processes.length === 0 && (
                         <div className="absolute inset-0 flex items-center px-3">
-                          <span className="text-xs text-gray-300">予定なし</span>
+                          <span className="text-xs text-gray-300">クリックして予定を追加</span>
                         </div>
                       )}
                     </div>
@@ -115,6 +213,19 @@ export default function StaffPage() {
             );
           })}
         </div>
+      )}
+
+      {/* 予定追加モーダル */}
+      {createTarget && (
+        <StaffProcessCreateModal
+          staffId={createTarget.staffId}
+          staffName={createTarget.staffName}
+          projects={projects}
+          processTypes={processTypes}
+          initialDate={createTarget.initialDate}
+          onSave={handleCreateSave}
+          onClose={() => setCreateTarget(null)}
+        />
       )}
     </div>
   );

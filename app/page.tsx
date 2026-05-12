@@ -43,6 +43,7 @@ interface Project {
   client: string | null;
   deadline: string | null;
   bridges: Bridge[];
+  processes: ProcessRecord[];
 }
 
 interface ProcessType {
@@ -59,9 +60,10 @@ interface EditTarget {
 }
 
 interface CreateTarget {
-  bridgeId: number;
-  bridgeName: string;
+  projectId: number;
   projectName: string;
+  bridgeId?: number;
+  bridgeName?: string;
   initialDate?: string;
 }
 
@@ -74,13 +76,13 @@ export default function DashboardPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [processTypes, setProcessTypes] = useState<ProcessType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set());
   const [view, setView] = useState<"gantt" | "list">("gantt");
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [saving, setSaving] = useState(false);
   const [filterTypeId, setFilterTypeId] = useState<number | null>(null);
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
-  const [showBridgeForm, setShowBridgeForm] = useState(false);
+  const [addBridgeProjectId, setAddBridgeProjectId] = useState<number | null>(null);
 
   // リストビュー用
   const [selectedBridgeIds, setSelectedBridgeIds] = useState<Set<number>>(new Set());
@@ -104,25 +106,38 @@ export default function DashboardPage() {
       setStaff(Array.isArray(staffData) ? staffData : []);
       setProcessTypes(Array.isArray(typesData) ? [...typesData].sort((a: ProcessType, b: ProcessType) => a.order - b.order) : []);
       setLoading(false);
-    }).catch(() => {
-      setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [month]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ロード後、選択中プロジェクトが未設定なら先頭を選択
+  // プロジェクトロード後、全て展開
   useEffect(() => {
-    if (projects.length > 0 && selectedProjectId === null) {
-      setSelectedProjectId(projects[0].id);
+    if (projects.length > 0) {
+      setExpandedProjectIds((prev) => {
+        const next = new Set(prev);
+        projects.forEach((p) => next.add(p.id));
+        return next;
+      });
     }
-  }, [projects, selectedProjectId]);
+  }, [projects]);
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
+  // アコーディオン開閉
+  const toggleProject = useCallback((projectId: number) => {
+    setExpandedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
+  }, []);
 
   // ─── ガントチャート用ハンドラー ──────────────────────────────────
 
-  const handleGridClick = useCallback((e: React.MouseEvent<HTMLDivElement>, bridge: Bridge, projectName: string) => {
+  const handleGridClick = useCallback((
+    e: React.MouseEvent<HTMLDivElement>,
+    context: { projectId: number; projectName: string; bridgeId?: number; bridgeName?: string }
+  ) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const relativeX = e.clientX - rect.left;
     const dayFraction = relativeX / rect.width;
@@ -131,14 +146,19 @@ export default function DashboardPage() {
     const yyyy = clickedDate.getFullYear();
     const mm = String(clickedDate.getMonth() + 1).padStart(2, "0");
     const dd = String(clickedDate.getDate()).padStart(2, "0");
-    setCreateTarget({ bridgeId: bridge.id, bridgeName: bridge.name, projectName, initialDate: `${yyyy}-${mm}-${dd}` });
+    setCreateTarget({ ...context, initialDate: `${yyyy}-${mm}-${dd}` });
   }, [year, monthNum, daysInMonth]);
 
   const handleCreateSave = useCallback(async (data: {
-    bridgeId: number; processTypeId: number; staffId: number | null;
-    startDate: string | null; endDate: string | null; note: string | null;
+    projectId: number;
+    bridgeId?: number;
+    processTypeId: number;
+    staffId: number | null;
+    startDate: string | null;
+    endDate: string | null;
+    note: string | null;
   }) => {
-    const tempId = -Date.now(); // 仮ID
+    const tempId = -Date.now();
     const processType = processTypes.find((pt) => pt.id === data.processTypeId)!;
     const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
     const tempRecord: ProcessRecord = {
@@ -152,52 +172,74 @@ export default function DashboardPage() {
       staff: staffMember,
       processType,
     };
-    // 即座にモーダルを閉じて仮レコードを画面に追加
-    setProjects((prev) => prev.map((p) => ({
-      ...p,
-      bridges: p.bridges.map((b) =>
-        b.id === data.bridgeId ? { ...b, processes: [...b.processes, tempRecord] } : b
-      ),
-    })));
+
+    // 即座に画面に追加
+    if (data.bridgeId) {
+      setProjects((prev) => prev.map((p) => ({
+        ...p,
+        bridges: p.bridges.map((b) =>
+          b.id === data.bridgeId ? { ...b, processes: [...b.processes, tempRecord] } : b
+        ),
+      })));
+    } else {
+      setProjects((prev) => prev.map((p) =>
+        p.id === data.projectId ? { ...p, processes: [...p.processes, tempRecord] } : p
+      ));
+    }
     setCreateTarget(null);
-    // バックグラウンドでDBに保存し、仮IDを本物のIDに差し替え
+
+    // バックグラウンドで保存
     try {
-      const res = await fetch(`/api/bridges/${data.bridgeId}/processes`, {
+      const url = data.bridgeId
+        ? `/api/bridges/${data.bridgeId}/processes`
+        : `/api/projects/${data.projectId}/processes`;
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ processTypeId: data.processTypeId, staffId: data.staffId, startDate: data.startDate, endDate: data.endDate, note: data.note }),
       });
       const created = await res.json();
-      setProjects((prev) => prev.map((p) => ({
-        ...p,
-        bridges: p.bridges.map((b) => ({
-          ...b,
-          processes: b.processes.map((proc) => proc.id === tempId ? { ...proc, id: created.id } : proc),
-        })),
-      })));
+      // 仮IDを本物のIDに差し替え
+      if (data.bridgeId) {
+        setProjects((prev) => prev.map((p) => ({
+          ...p,
+          bridges: p.bridges.map((b) => ({
+            ...b,
+            processes: b.processes.map((proc) => proc.id === tempId ? { ...proc, id: created.id } : proc),
+          })),
+        })));
+      } else {
+        setProjects((prev) => prev.map((p) => ({
+          ...p,
+          processes: p.id === data.projectId
+            ? p.processes.map((proc) => proc.id === tempId ? { ...proc, id: created.id } : proc)
+            : p.processes,
+        })));
+      }
     } catch { loadData(); }
   }, [processTypes, staff, loadData]);
 
-  const handleBarClick = useCallback((recordId: number, bridge: Bridge, projectName: string) => {
-    const record = bridge.processes.find((p) => p.id === recordId);
+  const handleBarClick = useCallback((recordId: number, processes: ProcessRecord[], projectName: string, bridgeName: string) => {
+    const record = processes.find((p) => p.id === recordId);
     if (!record) return;
-    setEditTarget({ record, bridgeName: bridge.name, projectName });
+    setEditTarget({ record, bridgeName, projectName });
   }, []);
 
   const handleDragEnd = useCallback(async (recordId: number, newStart: string, newEnd: string) => {
     setSaving(true);
-    // 即座にガントバーの位置を更新
     setProjects((prev) => prev.map((p) => ({
       ...p,
+      processes: p.processes.map((proc) => proc.id === recordId ? { ...proc, startDate: newStart, endDate: newEnd } : proc),
       bridges: p.bridges.map((b) => ({
         ...b,
-        processes: b.processes.map((proc) =>
-          proc.id === recordId ? { ...proc, startDate: newStart, endDate: newEnd } : proc
-        ),
+        processes: b.processes.map((proc) => proc.id === recordId ? { ...proc, startDate: newStart, endDate: newEnd } : proc),
       })),
     })));
     try {
-      const allRecords = projects.flatMap((p) => p.bridges.flatMap((b) => b.processes));
+      const allRecords = projects.flatMap((p) => [
+        ...p.processes,
+        ...p.bridges.flatMap((b) => b.processes),
+      ]);
       const rec = allRecords.find((r) => r.id === recordId);
       await fetch(`/api/processes/${recordId}`, {
         method: "PUT",
@@ -210,28 +252,27 @@ export default function DashboardPage() {
 
   // 橋梁を追加
   const handleBridgeAdd = useCallback(async (data: { name: string; serialNo: string; spans: string }) => {
-    if (!selectedProjectId) return;
+    if (!addBridgeProjectId) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/projects/${selectedProjectId}/bridges`, {
+      const res = await fetch(`/api/projects/${addBridgeProjectId}/bridges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       const newBridge = await res.json();
       setProjects((prev) => prev.map((p) =>
-        p.id === selectedProjectId
+        p.id === addBridgeProjectId
           ? { ...p, bridges: [...p.bridges, { ...newBridge, processes: [] }] }
           : p
       ));
-      setShowBridgeForm(false);
+      setAddBridgeProjectId(null);
     } finally { setSaving(false); }
-  }, [selectedProjectId]);
+  }, [addBridgeProjectId]);
 
   // 橋梁を削除（単体）
   const handleBridgeDelete = useCallback(async (bridgeId: number, bridgeName: string) => {
     if (!confirm(`「${bridgeName}」を削除しますか？\n（この橋梁の工程データもすべて削除されます）`)) return;
-    // 即座に画面から削除
     setProjects((prev) => prev.map((p) => ({
       ...p,
       bridges: p.bridges.filter((b) => b.id !== bridgeId),
@@ -246,7 +287,6 @@ export default function DashboardPage() {
     if (selectedBridgeIds.size === 0) return;
     if (!confirm(`選択した ${selectedBridgeIds.size} 件の橋梁を削除しますか？\n（工程データもすべて削除されます）`)) return;
     const idsToDelete = [...selectedBridgeIds];
-    // 即座に画面から削除
     setProjects((prev) => prev.map((p) => ({
       ...p,
       bridges: p.bridges.filter((b) => !idsToDelete.includes(b.id)),
@@ -265,9 +305,11 @@ export default function DashboardPage() {
     if (data.completedDate) status = "COMPLETED";
     else if (data.startDate) status = "IN_PROGRESS";
     const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
-    // 即座にモーダルを閉じて画面を更新
     setProjects((prev) => prev.map((p) => ({
       ...p,
+      processes: p.processes.map((proc) =>
+        proc.id === data.id ? { ...proc, ...data, status, staff: staffMember } : proc
+      ),
       bridges: p.bridges.map((b) => ({
         ...b,
         processes: b.processes.map((proc) =>
@@ -276,7 +318,6 @@ export default function DashboardPage() {
       })),
     })));
     setEditTarget(null);
-    // バックグラウンドでDBに保存
     try {
       await fetch(`/api/processes/${data.id}`, {
         method: "PUT",
@@ -286,23 +327,24 @@ export default function DashboardPage() {
     } catch { loadData(); }
   }, [staff, loadData]);
 
-  // ─── リストビュー用 ────────────────────────────────────────────
+  // ─── リストビュー用（全業務の橋梁をフラットに） ──────────────────
 
-  const bridges = selectedProject?.bridges ?? [];
+  type BridgeRow = Bridge & { projectName: string; projectId: number };
+  const allBridges: BridgeRow[] = projects.flatMap((p) =>
+    p.bridges.map((b) => ({ ...b, projectName: p.name, projectId: p.id }))
+  );
+  const staffNames = [...new Set(allBridges.flatMap((b) => b.processes.map((p) => p.staff?.name)).filter(Boolean))] as string[];
+  const processNames = [...new Set(allBridges.flatMap((b) => b.processes.map((p) => p.processType.name)))];
 
-  const staffNames = [...new Set(bridges.flatMap((b) => b.processes.map((p) => p.staff?.name)).filter(Boolean))] as string[];
-  const processNames = [...new Set(bridges.flatMap((b) => b.processes.map((p) => p.processType.name)))];
-
-  const filteredBridges = bridges.filter((bridge) => {
-    if (searchText && !bridge.name.includes(searchText) && !(bridge.serialNo ?? "").includes(searchText)) return false;
+  const filteredBridges = allBridges.filter((bridge) => {
+    if (searchText && !bridge.name.includes(searchText) && !(bridge.serialNo ?? "").includes(searchText) && !bridge.projectName.includes(searchText)) return false;
     const currentProcessName = getCurrentProcess(bridge.processes);
     if (filterProcess && currentProcessName !== filterProcess) return false;
     if (filterStaff) {
       if (!bridge.processes.some((p) => p.staff?.name === filterStaff)) return false;
     }
     if (filterStatus) {
-      const overallStatus = calcOverallStatus(bridge.processes);
-      if (overallStatus !== filterStatus) return false;
+      if (calcOverallStatus(bridge.processes) !== filterStatus) return false;
     }
     return true;
   });
@@ -335,45 +377,25 @@ export default function DashboardPage() {
       {/* ヘッダー行 */}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-800">工程予定表</h1>
-        <Link href="/settings" className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
-          ＋ 業務を追加
-        </Link>
-      </div>
-
-      {/* 業務プルダウン + ビュー切り替え */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-500 font-medium">業務：</label>
-          <select
-            value={selectedProjectId ?? ""}
-            onChange={(e) => setSelectedProjectId(Number(e.target.value))}
-            className="border border-gray-300 rounded px-3 py-1.5 text-sm min-w-48 bg-white"
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}{p.client ? `（${p.client}）` : ""}　{p.bridges.length}橋
-              </option>
-            ))}
-          </select>
-          {selectedProject?.deadline && (
-            <span className="text-xs text-gray-400">期限：{formatDate(selectedProject.deadline)}</span>
-          )}
-        </div>
-
-        {/* ガント / リスト 切り替え */}
-        <div className="ml-auto flex items-center border border-gray-300 rounded overflow-hidden">
-          <button
-            onClick={() => setView("gantt")}
-            className={`px-4 py-1.5 text-sm transition-colors ${view === "gantt" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-          >
-            📊 ガントチャート
-          </button>
-          <button
-            onClick={() => setView("list")}
-            className={`px-4 py-1.5 text-sm transition-colors border-l border-gray-300 ${view === "list" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-          >
-            📋 リスト
-          </button>
+          {/* ガント / リスト 切り替え */}
+          <div className="flex items-center border border-gray-300 rounded overflow-hidden">
+            <button
+              onClick={() => setView("gantt")}
+              className={`px-4 py-1.5 text-sm transition-colors ${view === "gantt" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              📊 ガント
+            </button>
+            <button
+              onClick={() => setView("list")}
+              className={`px-4 py-1.5 text-sm transition-colors border-l border-gray-300 ${view === "list" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
+            >
+              📋 リスト
+            </button>
+          </div>
+          <Link href="/settings" className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
+            ＋ 業務を追加
+          </Link>
         </div>
       </div>
 
@@ -387,7 +409,7 @@ export default function DashboardPage() {
       ) : view === "gantt" ? (
         /* ═══════════════ ガントチャートビュー ═══════════════ */
         <div>
-          {/* 月ナビ + 工程フィルター凡例 */}
+          {/* 月ナビ + 工程フィルター */}
           <div className="flex flex-wrap items-start gap-4 mb-3">
             <div className="flex items-center gap-2">
               <button onClick={() => setMonth(prevMonth(month))} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50">← 前月</button>
@@ -395,12 +417,6 @@ export default function DashboardPage() {
               <span className="font-bold text-gray-700 text-lg">{year}年{monthNum}月</span>
               <button onClick={() => setMonth(nextMonth(month))} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50">翌月 →</button>
               {saving && <span className="text-xs text-gray-400 ml-2">保存中...</span>}
-              <button
-                onClick={() => setShowBridgeForm(true)}
-                className="ml-2 border border-blue-500 text-blue-600 px-3 py-1 rounded text-sm hover:bg-blue-50"
-              >
-                ＋ 橋梁を追加
-              </button>
             </div>
             <div className="ml-auto bg-white border border-gray-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
               <button
@@ -423,66 +439,136 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ガントチャート本体 */}
-          {!selectedProject ? (
-            <div className="py-8 text-center text-gray-400">業務を選択してください</div>
-          ) : (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              {selectedProject.bridges.length === 0 && (
-                <div className="px-4 py-6 text-center text-gray-400 text-sm border-b border-gray-100">橋梁が登録されていません</div>
-              )}
-              {selectedProject.bridges.map((bridge) => (
-                <div key={bridge.id} className="flex items-stretch border-b border-gray-100 last:border-0 group">
-                  <div className="flex items-center flex-shrink-0" style={{ width: 220 }}>
+          {/* アコーディオン */}
+          <div className="space-y-3">
+            {projects.map((project) => {
+              const isExpanded = expandedProjectIds.has(project.id);
+              return (
+                <div key={project.id}>
+                  {/* アコーディオンヘッダー */}
+                  <div
+                    className="flex items-center justify-between bg-gray-100 hover:bg-gray-200 rounded-lg px-4 py-2.5 cursor-pointer transition-colors"
+                    onClick={() => toggleProject(project.id)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-gray-500 text-sm flex-shrink-0">{isExpanded ? "▼" : "▶"}</span>
+                      <span className="font-bold text-gray-800">{project.name}</span>
+                      {project.client && <span className="text-sm text-gray-500">（{project.client}）</span>}
+                      <span className="text-xs text-gray-400 flex-shrink-0">{project.bridges.length}橋</span>
+                      {project.deadline && (
+                        <span className="text-xs text-gray-400 flex-shrink-0">期限：{formatDate(project.deadline)}</span>
+                      )}
+                    </div>
                     <button
-                      onClick={() => router.push(`/bridges/${bridge.id}`)}
-                      className="flex-1 flex items-center px-4 py-2 text-left hover:bg-blue-50 transition-colors min-w-0 h-full"
+                      onClick={(e) => { e.stopPropagation(); setAddBridgeProjectId(project.id); }}
+                      className="text-xs border border-blue-400 text-blue-600 px-2 py-1 rounded hover:bg-blue-50 flex-shrink-0 ml-2"
                     >
-                      <div className="min-w-0">
-                        <div className="text-gray-700 font-medium text-sm truncate">{bridge.name}</div>
-                        {bridge.serialNo && <div className="text-xs text-gray-400">{bridge.serialNo}</div>}
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => handleBridgeDelete(bridge.id, bridge.name)}
-                      className="opacity-0 group-hover:opacity-100 px-2 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
-                      title="この橋梁を削除"
-                    >
-                      🗑
+                      ＋ 橋梁を追加
                     </button>
                   </div>
-                  <div className="flex-1 border-l border-gray-100 min-w-0">
-                    <GanttGrid year={year} month={monthNum}>
-                      <div
-                        className="relative cursor-cell"
-                        style={{ height: 36 }}
-                        onClick={(e) => handleGridClick(e, bridge, selectedProject.name)}
-                      >
-                        {bridge.processes
-                          .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
-                          .map((proc) => (
-                            <GanttBar
-                              key={proc.id}
-                              id={proc.id}
-                              startDate={proc.startDate}
-                              endDate={proc.endDate}
-                              completedDate={proc.completedDate}
-                              color={proc.processType.color}
-                              staffName={proc.staff?.name ?? null}
-                              processName={proc.processType.name}
-                              year={year}
-                              month={monthNum}
-                              onDragEnd={handleDragEnd}
-                              onClick={(rid) => handleBarClick(rid, bridge, selectedProject.name)}
-                            />
-                          ))}
+
+                  {/* 展開コンテンツ */}
+                  {isExpanded && (
+                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mt-1 ml-4">
+                      {/* 業務全体行（業務に直接登録） */}
+                      <div className="flex items-stretch border-b border-gray-100 group bg-gray-50">
+                        <div className="flex items-center px-4 py-1.5 flex-shrink-0" style={{ width: 220 }}>
+                          <span className="text-xs text-gray-400 italic">業務全体</span>
+                        </div>
+                        <div className="flex-1 border-l border-gray-100 min-w-0">
+                          <GanttGrid year={year} month={monthNum}>
+                            <div
+                              className="relative cursor-cell"
+                              style={{ height: 32 }}
+                              onClick={(e) => handleGridClick(e, { projectId: project.id, projectName: project.name })}
+                            >
+                              {project.processes
+                                .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
+                                .map((proc) => (
+                                  <GanttBar
+                                    key={proc.id}
+                                    id={proc.id}
+                                    startDate={proc.startDate}
+                                    endDate={proc.endDate}
+                                    completedDate={proc.completedDate}
+                                    color={proc.processType.color}
+                                    staffName={proc.staff?.name ?? null}
+                                    processName={proc.processType.name}
+                                    year={year}
+                                    month={monthNum}
+                                    onDragEnd={handleDragEnd}
+                                    onClick={(rid) => handleBarClick(rid, project.processes, project.name, "業務全体")}
+                                  />
+                                ))}
+                            </div>
+                          </GanttGrid>
+                        </div>
                       </div>
-                    </GanttGrid>
-                  </div>
+
+                      {/* 橋梁がない場合 */}
+                      {project.bridges.length === 0 && (
+                        <div className="px-4 py-4 text-center text-gray-400 text-xs">
+                          橋梁が未登録です。上の「＋橋梁を追加」から追加できます。
+                        </div>
+                      )}
+
+                      {/* 橋梁行 */}
+                      {project.bridges.map((bridge) => (
+                        <div key={bridge.id} className="flex items-stretch border-b border-gray-100 last:border-0 group">
+                          <div className="flex items-center flex-shrink-0" style={{ width: 220 }}>
+                            <button
+                              onClick={() => router.push(`/bridges/${bridge.id}`)}
+                              className="flex-1 flex items-center px-4 py-2 text-left hover:bg-blue-50 transition-colors min-w-0 h-full"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-gray-700 font-medium text-sm truncate">{bridge.name}</div>
+                                {bridge.serialNo && <div className="text-xs text-gray-400">{bridge.serialNo}</div>}
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => handleBridgeDelete(bridge.id, bridge.name)}
+                              className="opacity-0 group-hover:opacity-100 px-2 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
+                              title="この橋梁を削除"
+                            >
+                              🗑
+                            </button>
+                          </div>
+                          <div className="flex-1 border-l border-gray-100 min-w-0">
+                            <GanttGrid year={year} month={monthNum}>
+                              <div
+                                className="relative cursor-cell"
+                                style={{ height: 36 }}
+                                onClick={(e) => handleGridClick(e, { projectId: project.id, projectName: project.name, bridgeId: bridge.id, bridgeName: bridge.name })}
+                              >
+                                {bridge.processes
+                                  .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
+                                  .map((proc) => (
+                                    <GanttBar
+                                      key={proc.id}
+                                      id={proc.id}
+                                      startDate={proc.startDate}
+                                      endDate={proc.endDate}
+                                      completedDate={proc.completedDate}
+                                      color={proc.processType.color}
+                                      staffName={proc.staff?.name ?? null}
+                                      processName={proc.processType.name}
+                                      year={year}
+                                      month={monthNum}
+                                      onDragEnd={handleDragEnd}
+                                      onClick={(rid) => handleBarClick(rid, bridge.processes, project.name, bridge.name)}
+                                    />
+                                  ))}
+                              </div>
+                            </GanttGrid>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
       ) : (
         /* ═══════════════ リストビュー ═══════════════ */
@@ -491,7 +577,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end">
             <div>
               <label className="block text-xs text-gray-500 mb-1">橋梁名検索</label>
-              <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="橋梁名..." className="border border-gray-300 rounded px-3 py-1.5 text-sm w-36" />
+              <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="橋梁名・業務名..." className="border border-gray-300 rounded px-3 py-1.5 text-sm w-36" />
             </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">担当者</label>
@@ -523,19 +609,10 @@ export default function DashboardPage() {
             <div className="ml-auto flex items-center gap-3">
               <span className="text-sm text-gray-500">{sortedBridges.length}件</span>
               {selectedBridgeIds.size > 0 && (
-                <button
-                  onClick={handleBridgeBulkDelete}
-                  className="bg-red-500 text-white px-3 py-1.5 rounded text-sm hover:bg-red-600"
-                >
+                <button onClick={handleBridgeBulkDelete} className="bg-red-500 text-white px-3 py-1.5 rounded text-sm hover:bg-red-600">
                   🗑 選択削除（{selectedBridgeIds.size}件）
                 </button>
               )}
-              <button
-                onClick={() => setShowBridgeForm(true)}
-                className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700"
-              >
-                ＋ 橋梁を追加
-              </button>
             </div>
           </div>
 
@@ -553,14 +630,12 @@ export default function DashboardPage() {
                         if (el) el.indeterminate = selectedBridgeIds.size > 0 && !sortedBridges.every((b) => selectedBridgeIds.has(b.id));
                       }}
                       onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedBridgeIds(new Set(sortedBridges.map((b) => b.id)));
-                        } else {
-                          setSelectedBridgeIds(new Set());
-                        }
+                        if (e.target.checked) setSelectedBridgeIds(new Set(sortedBridges.map((b) => b.id)));
+                        else setSelectedBridgeIds(new Set());
                       }}
                     />
                   </th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">業務名</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">整理番号</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">橋梁名</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">径間数</th>
@@ -579,7 +654,7 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {sortedBridges.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center py-8 text-gray-400">該当する橋梁がありません</td></tr>
+                  <tr><td colSpan={11} className="text-center py-8 text-gray-400">該当する橋梁がありません</td></tr>
                 ) : sortedBridges.map((bridge) => {
                   const currentProcessName = getCurrentProcess(bridge.processes);
                   const currentRecord = bridge.processes.find((p) => p.processType.name === currentProcessName && !p.completedDate);
@@ -603,6 +678,7 @@ export default function DashboardPage() {
                           }}
                         />
                       </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{bridge.projectName}</td>
                       <td className="px-4 py-3 text-gray-500">{bridge.serialNo ?? "-"}</td>
                       <td className="px-4 py-3 font-medium text-gray-800">{bridge.name}</td>
                       <td className="px-4 py-3 text-gray-600 text-center">{bridge.spans ?? "-"}</td>
@@ -642,20 +718,21 @@ export default function DashboardPage() {
       )}
 
       {/* 橋梁追加モーダル */}
-      {showBridgeForm && selectedProject && (
+      {addBridgeProjectId !== null && (
         <BridgeFormModal
-          projectName={selectedProject.name}
+          projectName={projects.find((p) => p.id === addBridgeProjectId)?.name ?? ""}
           onSave={handleBridgeAdd}
-          onClose={() => setShowBridgeForm(false)}
+          onClose={() => setAddBridgeProjectId(null)}
         />
       )}
 
-      {/* 新規登録モーダル */}
+      {/* 新規工程登録モーダル */}
       {createTarget && (
         <ProcessCreateModal
+          projectId={createTarget.projectId}
+          projectName={createTarget.projectName}
           bridgeId={createTarget.bridgeId}
           bridgeName={createTarget.bridgeName}
-          projectName={createTarget.projectName}
           staff={staff}
           processTypes={processTypes}
           initialDate={createTarget.initialDate}

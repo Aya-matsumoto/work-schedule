@@ -9,15 +9,16 @@ datasource db {
 
 // 業務（案件）
 model Project {
-  id         Int       @id @default(autoincrement())
+  id         Int              @id @default(autoincrement())
   name       String
   client     String?
   fiscalYear String?
   deadline   DateTime?
   note       String?
   bridges    Bridge[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  processes  ProcessRecord[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
 }
 
 // 橋梁
@@ -59,19 +60,21 @@ model ProcessType {
 
 // 工程レコード
 model ProcessRecord {
-  id            Int         @id @default(autoincrement())
-  bridgeId      Int
-  bridge        Bridge      @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  id            Int          @id @default(autoincrement())
+  bridgeId      Int?
+  bridge        Bridge?      @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  projectId     Int?
+  project       Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   processTypeId Int
-  processType   ProcessType @relation(fields: [processTypeId], references: [id])
+  processType   ProcessType  @relation(fields: [processTypeId], references: [id])
   staffId       Int?
-  staff         Staff?      @relation(fields: [staffId], references: [id])
-  status        String      @default("NOT_STARTED")
+  staff         Staff?       @relation(fields: [staffId], references: [id])
+  status        String       @default("NOT_STARTED")
   startDate     DateTime?
   endDate       DateTime?
   completedDate DateTime?
   note          String?
-  iteration     Int         @default(1)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  iteration     Int          @default(1)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 }

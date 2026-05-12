@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
           include: {
             processType: true,
             bridge: { include: { project: true } },
+            project: true,
           },
         },
       },
