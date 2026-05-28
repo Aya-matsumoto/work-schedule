@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { compareSerialNo } from "@/lib/utils";
 
 // GET /api/gantt/dashboard?month=YYYY-MM
 export async function GET(req: NextRequest) {
@@ -17,7 +18,6 @@ export async function GET(req: NextRequest) {
           orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
         },
         bridges: {
-          orderBy: { serialNo: "asc" },
           include: {
             processes: {
               include: { processType: true, staff: true },
@@ -30,6 +30,11 @@ export async function GET(req: NextRequest) {
           },
         },
       },
+    });
+
+    // 橋梁をナチュラルソート（整理番号を数値として比較）
+    projects.forEach((p) => {
+      p.bridges.sort((a, b) => compareSerialNo(a.serialNo, b.serialNo));
     });
 
     return NextResponse.json(projects);

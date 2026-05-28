@@ -132,6 +132,37 @@ export function currentMonth(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// 橋梁の整理番号をナチュラルソート（数字は数値として比較）
+// 例: "50" < "100"、"1-1" < "2-1" < "10-1"
+export function compareSerialNo(a: string | null, b: string | null): number {
+  // null は末尾に
+  if (a === null && b === null) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+
+  // 文字列を「テキスト部分」と「数字部分」に分割して交互に比較
+  const tokenize = (s: string) =>
+    s.split(/(\d+)/).map((chunk, i) =>
+      i % 2 === 1 ? parseInt(chunk, 10) : chunk
+    );
+
+  const ta = tokenize(a);
+  const tb = tokenize(b);
+
+  for (let i = 0; i < Math.max(ta.length, tb.length); i++) {
+    if (i >= ta.length) return -1;
+    if (i >= tb.length) return 1;
+    const ai = ta[i], bi = tb[i];
+    if (typeof ai === "number" && typeof bi === "number") {
+      if (ai !== bi) return ai - bi;
+    } else {
+      const as = String(ai), bs = String(bi);
+      if (as !== bs) return as < bs ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
 // ガントバーの left% と width% を計算
 export function calcGanttBar(
   startDate: Date | string | null | undefined,

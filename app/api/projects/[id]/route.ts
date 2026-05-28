@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { compareSerialNo } from "@/lib/utils";
 
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -13,11 +14,14 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
               orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
             },
           },
-          orderBy: { serialNo: "asc" },
         },
       },
     });
     if (!project) return NextResponse.json({ error: "見つかりません" }, { status: 404 });
+
+    // 橋梁をナチュラルソート（整理番号を数値として比較）
+    project.bridges.sort((a, b) => compareSerialNo(a.serialNo, b.serialNo));
+
     return NextResponse.json(project);
   } catch {
     return NextResponse.json({ error: "取得失敗" }, { status: 500 });
