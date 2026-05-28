@@ -4,16 +4,27 @@ import { useEffect, useState, useCallback } from "react";
 import GanttGrid from "@/components/GanttGrid";
 import GanttBar from "@/components/GanttBar";
 import StaffProcessCreateModal from "@/components/StaffProcessCreateModal";
+import ProcessEditModal from "@/components/ProcessEditModal";
 import { currentMonth, prevMonth, nextMonth, parseYearMonth } from "@/lib/utils";
 
 interface ProcessRecord {
   id: number;
+  processTypeId: number;
+  processType: { id: number; name: string; color: string };
+  staffId: number | null;
+  status: string;
   startDate: string | null;
   endDate: string | null;
   completedDate: string | null;
-  processType: { name: string; color: string };
+  note: string | null;
   bridge: { id: number; name: string; project: { id: number; name: string } } | null;
   project: { id: number; name: string } | null;
+}
+
+interface EditTarget {
+  record: ProcessRecord;
+  bridgeName: string;
+  projectName: string;
 }
 
 interface StaffAssignment {
@@ -50,6 +61,7 @@ export default function StaffPage() {
   const [processTypes, setProcessTypes] = useState<ProcessType[]>([]);
   const [loading, setLoading] = useState(false);
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
   const { year, month: monthNum } = parseYearMonth(month);
   const daysInMonth = new Date(year, monthNum, 0).getDate();
@@ -130,6 +142,78 @@ export default function StaffPage() {
       loadSchedule();
     }
   }, [loadSchedule]);
+
+  // 工程バーをクリック → 編集モーダルを開く
+  const handleProcessBarClick = useCallback((recordId: number) => {
+    for (const s of staffList) {
+      const proc = s.processes.find((p) => p.id === recordId);
+      if (proc) {
+        const bridgeName = proc.bridge?.name ?? proc.project?.name ?? "";
+        const projectName = proc.bridge?.project?.name ?? proc.project?.name ?? "";
+        setEditTarget({ record: proc, bridgeName, projectName });
+        return;
+      }
+    }
+  }, [staffList]);
+
+  // 工程バーのドラッグ → 日程更新
+  const handleProcessDragEnd = useCallback(async (recordId: number, newStart: string, newEnd: string) => {
+    // 画面を即時更新
+    setStaffList((prev) => prev.map((s) => ({
+      ...s,
+      processes: s.processes.map((p) =>
+        p.id === recordId ? { ...p, startDate: newStart, endDate: newEnd } : p
+      ),
+    })));
+    try {
+      const allProcs = staffList.flatMap((s) => s.processes);
+      const rec = allProcs.find((p) => p.id === recordId);
+      await fetch(`/api/processes/${recordId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffId: rec?.staffId ?? null,
+          startDate: newStart,
+          endDate: newEnd,
+          completedDate: rec?.completedDate ?? null,
+          note: rec?.note ?? null,
+          status: rec?.status ?? "IN_PROGRESS",
+        }),
+      });
+    } catch { loadSchedule(); }
+  }, [staffList, loadSchedule]);
+
+  // 工程編集モーダル 保存
+  const handleProcessSave = useCallback(async (data: {
+    id: number;
+    staffId: number | null;
+    startDate: string | null;
+    endDate: string | null;
+    completedDate: string | null;
+    note: string | null;
+  }) => {
+    setEditTarget(null);
+    const rec = staffList.flatMap((s) => s.processes).find((p) => p.id === data.id);
+    const status = data.completedDate
+      ? "COMPLETED"
+      : data.startDate
+      ? "IN_PROGRESS"
+      : "NOT_STARTED";
+    // 画面を即時更新
+    setStaffList((prev) => prev.map((s) => ({
+      ...s,
+      processes: s.processes.map((p) =>
+        p.id === data.id ? { ...p, ...data, status } : p
+      ),
+    })));
+    try {
+      await fetch(`/api/processes/${data.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, status }),
+      });
+    } catch { loadSchedule(); }
+  }, [staffList, loadSchedule]);
 
   // 空き確認：指定日に予定がない担当者を判定
   function isAvailable(s: StaffWithSchedule): boolean {
@@ -223,6 +307,8 @@ export default function StaffPage() {
                           customLabel={getLabel(proc)}
                           year={year}
                           month={monthNum}
+                          onClick={handleProcessBarClick}
+                          onDragEnd={handleProcessDragEnd}
                         />
                       ))}
                       {s.processes.length === 0 && !s.assignments?.length && (
@@ -249,6 +335,18 @@ export default function StaffPage() {
           initialDate={createTarget.initialDate}
           onSave={handleCreateSave}
           onClose={() => setCreateTarget(null)}
+        />
+      )}
+
+      {/* 工程編集モーダル */}
+      {editTarget && (
+        <ProcessEditModal
+          record={editTarget.record}
+          staff={staffList.map((s) => ({ id: s.id, name: s.name }))}
+          bridgeName={editTarget.bridgeName}
+          projectName={editTarget.projectName}
+          onSave={handleProcessSave}
+          onClose={() => setEditTarget(null)}
         />
       )}
     </div>
