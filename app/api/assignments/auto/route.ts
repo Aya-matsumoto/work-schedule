@@ -253,6 +253,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 「調書作成」工程種別を取得
+    const choshoProcessType = await prisma.processType.findFirst({
+      where: { name: "調書作成" },
+    });
+
     // 既存の割り当てをすべて削除（手動修正済み含む）
     const deleteWhere = projectId
       ? { fiscalYear: year, bridge: { projectId: parseInt(projectId) } }
@@ -261,6 +266,39 @@ export async function POST(req: NextRequest) {
 
     if (newAssignments.length > 0) {
       await prisma.bridgeAssignment.createMany({ data: newAssignments });
+    }
+
+    // 「調書作成」工程レコードを自動生成・更新
+    if (choshoProcessType) {
+      for (const a of newAssignments) {
+        // 同一橋梁・同一工程種別（iteration=1）のレコードがあれば更新、なければ作成
+        const existing = await prisma.processRecord.findFirst({
+          where: { bridgeId: a.bridgeId, processTypeId: choshoProcessType.id, iteration: 1 },
+        });
+        if (existing) {
+          await prisma.processRecord.update({
+            where: { id: existing.id },
+            data: {
+              staffId: a.staffId,
+              startDate: a.startDate,
+              endDate: a.endDate,
+              status: "NOT_STARTED",
+            },
+          });
+        } else {
+          await prisma.processRecord.create({
+            data: {
+              bridgeId: a.bridgeId,
+              processTypeId: choshoProcessType.id,
+              staffId: a.staffId,
+              startDate: a.startDate,
+              endDate: a.endDate,
+              status: "NOT_STARTED",
+              iteration: 1,
+            },
+          });
+        }
+      }
     }
 
     const resultWhere = projectId
