@@ -117,9 +117,22 @@ export default function SettingsPage() {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => { setCsvPreview(parseCSV(ev.target?.result as string)); setCsvResult(null); };
-    reader.readAsText(file, "UTF-8");
+    // まずUTF-8で試みる。文字化けしていればShift-JISで再読み込み
+    const tryRead = (encoding: string) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        if (encoding === "UTF-8" && text.includes("�")) {
+          // 文字化け検出 → Shift-JISで再試行
+          tryRead("Shift-JIS");
+          return;
+        }
+        setCsvPreview(parseCSV(text));
+        setCsvResult(null);
+      };
+      reader.readAsText(file, encoding);
+    };
+    tryRead("UTF-8");
   };
   const execImport = async () => {
     setImporting(true);
@@ -302,6 +315,14 @@ export default function SettingsPage() {
                       <p className="text-gray-500">スキップ：{csvResult.skipped}件</p>
                     )}
                   </div>
+                  {csvResult.dateParseErrors?.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-sm font-medium text-orange-600 mb-1">⚠ 日付の解析に失敗した行（スキップされました）：</p>
+                      <ul className="text-sm text-orange-600 space-y-1">
+                        {csvResult.dateParseErrors.map((e: string, i: number) => <li key={i}>・{e}</li>)}
+                      </ul>
+                    </div>
+                  )}
                   {csvResult.errors?.length > 0 && (
                     <ul className="mt-3 text-sm text-red-600 space-y-1">
                       {csvResult.errors.map((e: string, i: number) => <li key={i}>・{e}</li>)}

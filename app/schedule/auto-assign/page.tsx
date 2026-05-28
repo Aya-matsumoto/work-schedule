@@ -10,6 +10,7 @@ interface Bridge {
   spans: number | null;
   spanCount: number;
   spanCoefficient: number;
+  inspectionDate: string | null;
   projectId: number;
   project: { name: string };
 }
@@ -30,6 +31,14 @@ interface Assignment {
 // ─── ユーティリティ ──────────────────────────────────────
 function toDateStr(d: Date): string { return d.toISOString().slice(0, 10); }
 function addDays(d: Date, n: number): Date { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
+// タイムゾーンズレなしで "YYYY-MM-DD" に変換（APIから返ってくるUTC日時用）
+function toLocalDateStr(dateStr: string): string {
+  const d = new Date(dateStr);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 function getDaysInMonth(y: number, m: number): number { return new Date(y, m, 0).getDate(); }
 function formatYMD(s: string | null): string {
   if (!s) return "-";
@@ -208,6 +217,7 @@ export default function AutoAssignPage() {
             spans: b.spans ?? null,
             spanCount: b.spanCount ?? 1,
             spanCoefficient: b.spanCoefficient ?? 0.5,
+            inspectionDate: b.inspectionDate ? toLocalDateStr(b.inspectionDate) : null,
             projectId: p.id,
             project: { name: p.name },
           })),
@@ -221,10 +231,16 @@ export default function AutoAssignPage() {
     setAllStaff(sList);
     setAssignments(aList);
 
-    // 点検完了日
+    // 点検完了日：まず橋梁マスタのinspectionDateを初期値に設定
     const dMap: Record<number, string> = {};
+    for (const p of pList) {
+      for (const b of p.bridges) {
+        if (b.inspectionDate) dMap[b.id] = b.inspectionDate;
+      }
+    }
+    // 割り振り済みデータのinspectionDoneDateで上書き（こちらを優先）
     for (const a of aList) {
-      if (a.inspectionDoneDate) dMap[a.bridgeId] = a.inspectionDoneDate.slice(0, 10);
+      if (a.inspectionDoneDate) dMap[a.bridgeId] = toLocalDateStr(a.inspectionDoneDate);
     }
     setInspectionDates(dMap);
 
