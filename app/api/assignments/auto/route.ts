@@ -80,8 +80,12 @@ function buildWorkMap(
 // POST /api/assignments/auto
 export async function POST(req: NextRequest) {
   try {
-    const { fiscalYear, projectId, inspectionDates } = await req.json();
+    const { fiscalYear, projectId, inspectionDates, daysAfterInspection } = await req.json();
     const year = parseInt(fiscalYear);
+    // 点検完了日から何日後に作業開始するか（未指定時はデフォルト8日）
+    const daysOffset: number = typeof daysAfterInspection === "number" && daysAfterInspection >= 0
+      ? daysAfterInspection
+      : 8;
 
     const fyStart = new Date(year, 3, 1);       // 4月1日（ローカル）
     const fyEnd = new Date(year + 1, 2, 31, 23, 59, 59); // 翌年3月31日
@@ -155,7 +159,7 @@ export async function POST(req: NextRequest) {
           return null;
         }
         const doneDate = parseLocalDate(doneDateStr);
-        const availableFrom = addDays(doneDate, 8);
+        const availableFrom = addDays(doneDate, daysOffset);
         return { bridge: b, requiredHours, availableFrom, inspectionDoneDate: doneDate };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null && x.requiredHours > 0)

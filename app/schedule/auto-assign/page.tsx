@@ -179,6 +179,9 @@ export default function AutoAssignPage() {
   // 点検完了日
   const [inspectionDates, setInspectionDates] = useState<Record<number, string>>({});
 
+  // 点検完了日から何日後に作業開始するか
+  const [daysAfterInspection, setDaysAfterInspection] = useState(8);
+
   // 実行
   const [running, setRunning] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -327,7 +330,7 @@ export default function AutoAssignPage() {
       const res = await fetch("/api/assignments/auto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fiscalYear, projectId: selectedProjectId, inspectionDates: inspectionList }),
+        body: JSON.stringify({ fiscalYear, projectId: selectedProjectId, inspectionDates: inspectionList, daysAfterInspection }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -558,15 +561,30 @@ export default function AutoAssignPage() {
 
               {/* ─── 橋梁テーブル ─── */}
               <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                   <h2 className="font-bold text-gray-800 text-sm">🌉 橋梁・点検完了日</h2>
-                  <button
-                    onClick={handleAutoAssign}
-                    disabled={running || selectedStaffIds.length === 0}
-                    className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center gap-2"
-                  >
-                    {running ? "⏳ 割り振り中..." : "🔄 自動割り振り実行"}
-                  </button>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* 作業開始可能日の設定 */}
+                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
+                      <span>点検完了日の</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={daysAfterInspection}
+                        onChange={(e) => setDaysAfterInspection(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="border border-gray-300 rounded px-2 py-1 text-sm w-16 text-center"
+                      />
+                      <span>日後から作業開始</span>
+                    </div>
+                    <button
+                      onClick={handleAutoAssign}
+                      disabled={running || selectedStaffIds.length === 0}
+                      className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center gap-2"
+                    >
+                      {running ? "⏳ 割り振り中..." : "🔄 自動割り振り実行"}
+                    </button>
+                  </div>
                 </div>
                 {selectedStaffIds.length === 0 && (
                   <p className="text-xs text-orange-500 mb-2">⚠ 担当者が未選択です。上のパネルで担当者を選択してください（未選択の場合は全担当者で実行されます）</p>
@@ -592,7 +610,7 @@ export default function AutoAssignPage() {
                         const hours = effectiveSpanCount * b.spanCoefficient * 8;
                         const doneDateStr = inspectionDates[b.id] ?? "";
                         const availFrom = doneDateStr
-                          ? toDateStr(addDays(new Date(doneDateStr), 8))
+                          ? toDateStr(addDays(new Date(doneDateStr), daysAfterInspection))
                           : "-";
                         return (
                           <tr key={b.id} className="border-b border-gray-100 hover:bg-gray-50">
