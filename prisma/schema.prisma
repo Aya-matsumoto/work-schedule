@@ -15,6 +15,7 @@ model Project {
   fiscalYear       String?
   deadline         DateTime?
   note             String?
+  displayOrder     Int              @default(0)
   bridges          Bridge[]
   processes        ProcessRecord[]
   staffAssignments ProjectStaff[]

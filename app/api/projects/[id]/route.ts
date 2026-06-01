@@ -30,10 +30,17 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { name, client, fiscalYear, deadline, note } = await req.json();
+    const { name, client, fiscalYear, deadline, note, displayOrder } = await req.json();
     const project = await prisma.project.update({
       where: { id: parseInt(params.id) },
-      data: { name, client, fiscalYear, deadline: deadline ? new Date(deadline) : null, note },
+      data: {
+        name,
+        client,
+        fiscalYear,
+        deadline: deadline ? new Date(deadline) : null,
+        note,
+        ...(typeof displayOrder === "number" ? { displayOrder } : {}),
+      },
     });
     return NextResponse.json(project);
   } catch {

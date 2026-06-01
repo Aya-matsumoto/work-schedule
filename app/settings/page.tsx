@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { STAFF_TYPE_LABELS, toInputDate } from "@/lib/utils";
 
-interface Project { id: number; name: string; client: string | null; fiscalYear: string | null; deadline: string | null; note: string | null; }
+interface Project { id: number; name: string; client: string | null; fiscalYear: string | null; deadline: string | null; note: string | null; displayOrder: number; }
 interface Staff { id: number; name: string; type: string; color: string; }
 interface ProcessType { id: number; name: string; order: number; color: string; }
 
@@ -56,6 +56,30 @@ export default function SettingsPage() {
     if (res.ok) { await reload(); showMsg("success", "削除しました"); }
     else showMsg("error", "削除に失敗しました");
   };
+  // 業務の表示順を変更（↑/↓ボタン用）
+  const moveProject = async (p: Project, dir: "up" | "down") => {
+    // displayOrder昇順 → 同値はid降順（登録が新しい順）でソート
+    const sorted = [...projects].sort((a, b) =>
+      a.displayOrder !== b.displayOrder ? a.displayOrder - b.displayOrder : b.id - a.id
+    );
+    const idx = sorted.findIndex((x) => x.id === p.id);
+    const swapIdx = dir === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+
+    // 隣と位置を入れ替えた新しい並び順を作成し、全件のdisplayOrderを連番で振り直す
+    const newSorted = [...sorted];
+    [newSorted[idx], newSorted[swapIdx]] = [newSorted[swapIdx], newSorted[idx]];
+
+    await fetch("/api/projects/reorder", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orders: newSorted.map((proj, i) => ({ id: proj.id, displayOrder: i })),
+      }),
+    });
+    await reload();
+  };
+
   const startEditProject = (p: Project) => {
     setEditingProject(p);
     setProjectForm({ name: p.name, client: p.client ?? "", fiscalYear: p.fiscalYear ?? "", deadline: toInputDate(p.deadline), note: p.note ?? "" });
@@ -219,15 +243,32 @@ export default function SettingsPage() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="text-center px-2 py-3 text-gray-500 font-medium w-16">順番</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">業務名</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">元請け</th>
                   <th className="text-left px-4 py-3 text-gray-600 font-medium">提出期限</th>
-                  <th className="w-24"></th>
+                  <th className="w-28"></th>
                 </tr>
               </thead>
               <tbody>
-                {projects.map((p) => (
+                {projects.map((p, idx) => (
                   <tr key={p.id} className="border-b border-gray-100">
+                    <td className="px-2 py-3 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <button
+                          onClick={() => moveProject(p, "up")}
+                          disabled={idx === 0}
+                          className="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-1"
+                          title="上に移動"
+                        >▲</button>
+                        <button
+                          onClick={() => moveProject(p, "down")}
+                          disabled={idx === projects.length - 1}
+                          className="text-gray-400 hover:text-gray-700 disabled:opacity-20 leading-none text-xs px-1"
+                          title="下に移動"
+                        >▼</button>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 font-medium">{p.name}</td>
                     <td className="px-4 py-3 text-gray-500">{p.client ?? "-"}</td>
                     <td className="px-4 py-3 text-gray-500">{p.deadline ? new Date(p.deadline).toLocaleDateString("ja-JP") : "-"}</td>
@@ -237,7 +278,7 @@ export default function SettingsPage() {
                     </td>
                   </tr>
                 ))}
-                {projects.length === 0 && <tr><td colSpan={4} className="text-center py-6 text-gray-400">業務がありません</td></tr>}
+                {projects.length === 0 && <tr><td colSpan={5} className="text-center py-6 text-gray-400">業務がありません</td></tr>}
               </tbody>
             </table>
           </div>

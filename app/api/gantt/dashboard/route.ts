@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const [year, month] = monthStr.split("-").map(Number);
 
     const projects = await prisma.project.findMany({
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ displayOrder: "asc" }, { createdAt: "desc" }],
       include: {
         processes: {
           include: { processType: true, staff: true },
