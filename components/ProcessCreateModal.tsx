@@ -16,7 +16,7 @@ interface Props {
     projectId: number;
     bridgeId?: number;
     processTypeId: number;
-    staffId: number | null;
+    staffIds: number[];
     startDate: string | null;
     endDate: string | null;
     note: string | null;
@@ -29,13 +29,19 @@ export default function ProcessCreateModal({
 }: Props) {
   const [form, setForm] = useState({
     processTypeId: processTypes[0]?.id.toString() ?? "",
-    staffId: "",
     startDate: initialDate ?? "",
     endDate: "",
     note: "",
   });
+  const [selectedStaffIds, setSelectedStaffIds] = useState<number[]>([]);
 
   const selectedType = processTypes.find((pt) => pt.id.toString() === form.processTypeId);
+
+  const toggleStaff = (id: number) => {
+    setSelectedStaffIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
 
   const handleSave = () => {
     if (!form.processTypeId) return;
@@ -43,7 +49,7 @@ export default function ProcessCreateModal({
       projectId,
       bridgeId,
       processTypeId: parseInt(form.processTypeId),
-      staffId: form.staffId ? parseInt(form.staffId) : null,
+      staffIds: selectedStaffIds,
       startDate: form.startDate || null,
       endDate: form.endDate || null,
       note: form.note || null,
@@ -85,17 +91,26 @@ export default function ProcessCreateModal({
             )}
           </div>
 
-          {/* 担当者 */}
+          {/* 担当者（複数選択） */}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">担当者</label>
-            <select
-              value={form.staffId}
-              onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))}
-              className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
-            >
-              <option value="">未定</option>
-              {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <label className="block text-xs text-gray-500 mb-1">担当者（複数選択可）</label>
+            <div className="border border-gray-300 rounded px-3 py-2 max-h-36 overflow-y-auto space-y-1">
+              {staff.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm select-none">
+                  <input
+                    type="checkbox"
+                    checked={selectedStaffIds.includes(s.id)}
+                    onChange={() => toggleStaff(s.id)}
+                    className="accent-blue-600"
+                  />
+                  <span>{s.name}</span>
+                </label>
+              ))}
+              {staff.length === 0 && <span className="text-xs text-gray-400">担当者が登録されていません</span>}
+            </div>
+            {selectedStaffIds.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1">未選択（未定）</p>
+            )}
           </div>
 
           {/* 日程 */}

@@ -51,6 +51,7 @@ model Staff {
   shifts             StaffShift[]
   assignments        BridgeAssignment[]
   projectAssignments ProjectStaff[]
+  processRecords     ProcessRecordStaff[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 }
@@ -81,23 +82,35 @@ model ProcessType {
 
 // 工程レコード
 model ProcessRecord {
-  id            Int          @id @default(autoincrement())
+  id            Int                  @id @default(autoincrement())
   bridgeId      Int?
-  bridge        Bridge?      @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  bridge        Bridge?              @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
   projectId     Int?
-  project       Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   processTypeId Int
-  processType   ProcessType  @relation(fields: [processTypeId], references: [id])
+  processType   ProcessType          @relation(fields: [processTypeId], references: [id])
   staffId       Int?
-  staff         Staff?       @relation(fields: [staffId], references: [id])
-  status        String       @default("NOT_STARTED")
+  staff         Staff?               @relation(fields: [staffId], references: [id])
+  staffMembers  ProcessRecordStaff[]
+  status        String               @default("NOT_STARTED")
   startDate     DateTime?
   endDate       DateTime?
   completedDate DateTime?
   note          String?
-  iteration     Int          @default(1)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  iteration     Int                  @default(1)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+// 工程レコード担当者（複数担当者対応）
+model ProcessRecordStaff {
+  id              Int           @id @default(autoincrement())
+  processRecordId Int
+  processRecord   ProcessRecord @relation(fields: [processRecordId], references: [id], onDelete: Cascade)
+  staffId         Int
+  staff           Staff         @relation(fields: [staffId], references: [id])
+
+  @@unique([processRecordId, staffId])
 }
 
 // 担当者シフト・勤務時間

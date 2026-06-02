@@ -26,6 +26,7 @@ interface ProcessRecord {
   staffId: number | null;
   note: string | null;
   staff: { id: number; name: string } | null;
+  staffMembers?: { staffId: number; staff: { id: number; name: string } }[];
   processType: { id: number; name: string; order: number; color: string };
 }
 
@@ -171,23 +172,29 @@ export default function DashboardPage() {
     projectId: number;
     bridgeId?: number;
     processTypeId: number;
-    staffId: number | null;
+    staffIds: number[];
     startDate: string | null;
     endDate: string | null;
     note: string | null;
   }) => {
     const tempId = -Date.now();
     const processType = processTypes.find((pt) => pt.id === data.processTypeId)!;
-    const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
+    const primaryStaffId = data.staffIds[0] ?? null;
+    const staffMember = staff.find((s) => s.id === primaryStaffId) ?? null;
+    const staffMembersTemp = data.staffIds.map((sid) => ({
+      staffId: sid,
+      staff: staff.find((s) => s.id === sid) ?? { id: sid, name: "" },
+    }));
     const tempRecord: ProcessRecord = {
       id: tempId,
       startDate: data.startDate,
       endDate: data.endDate,
       completedDate: null,
       status: data.startDate ? "IN_PROGRESS" : "NOT_STARTED",
-      staffId: data.staffId,
+      staffId: primaryStaffId,
       note: data.note,
       staff: staffMember,
+      staffMembers: staffMembersTemp,
       processType,
     };
 
@@ -214,7 +221,7 @@ export default function DashboardPage() {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ processTypeId: data.processTypeId, staffId: data.staffId, startDate: data.startDate, endDate: data.endDate, note: data.note }),
+        body: JSON.stringify({ processTypeId: data.processTypeId, staffIds: data.staffIds, startDate: data.startDate, endDate: data.endDate, note: data.note }),
       });
       const created = await res.json();
       // 仮IDを本物のIDに差し替え
@@ -393,22 +400,31 @@ export default function DashboardPage() {
   }, [selectedBridgeIds, loadData]);
 
   const handleModalSave = useCallback(async (data: {
-    id: number; staffId: number | null; startDate: string | null;
+    id: number; staffIds: number[]; startDate: string | null;
     endDate: string | null; completedDate: string | null; note: string | null;
   }) => {
     let status = "NOT_STARTED";
     if (data.completedDate) status = "COMPLETED";
     else if (data.startDate) status = "IN_PROGRESS";
-    const staffMember = staff.find((s) => s.id === data.staffId) ?? null;
+    const primaryStaffId = data.staffIds[0] ?? null;
+    const staffMember = staff.find((s) => s.id === primaryStaffId) ?? null;
+    const staffMembersUpdated = data.staffIds.map((sid) => ({
+      staffId: sid,
+      staff: staff.find((s) => s.id === sid) ?? { id: sid, name: "" },
+    }));
     setProjects((prev) => prev.map((p) => ({
       ...p,
       processes: p.processes.map((proc) =>
-        proc.id === data.id ? { ...proc, ...data, status, staff: staffMember } : proc
+        proc.id === data.id
+          ? { ...proc, ...data, staffId: primaryStaffId, status, staff: staffMember, staffMembers: staffMembersUpdated }
+          : proc
       ),
       bridges: p.bridges.map((b) => ({
         ...b,
         processes: b.processes.map((proc) =>
-          proc.id === data.id ? { ...proc, ...data, status, staff: staffMember } : proc
+          proc.id === data.id
+            ? { ...proc, ...data, staffId: primaryStaffId, status, staff: staffMember, staffMembers: staffMembersUpdated }
+            : proc
         ),
       })),
     })));
@@ -417,10 +433,25 @@ export default function DashboardPage() {
       await fetch(`/api/processes/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, status }),
+        body: JSON.stringify({ staffIds: data.staffIds, startDate: data.startDate, endDate: data.endDate, completedDate: data.completedDate, note: data.note, status }),
       });
     } catch { loadData(); }
   }, [staff, loadData]);
+
+  const handleProcessDelete = useCallback(async (processId: number) => {
+    setProjects((prev) => prev.map((p) => ({
+      ...p,
+      processes: p.processes.filter((proc) => proc.id !== processId),
+      bridges: p.bridges.map((b) => ({
+        ...b,
+        processes: b.processes.filter((proc) => proc.id !== processId),
+      })),
+    })));
+    setEditTarget(null);
+    try {
+      await fetch(`/api/processes/${processId}`, { method: "DELETE" });
+    } catch { loadData(); }
+  }, [loadData]);
 
   // ─── リストビュー用（全業務の橋梁をフラットに） ──────────────────
 
@@ -587,7 +618,7 @@ export default function DashboardPage() {
                                     endDate={proc.endDate}
                                     completedDate={proc.completedDate}
                                     color={proc.processType.color}
-                                    staffName={proc.staff?.name ?? null}
+                                    staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)}
                                     processName={proc.processType.name}
                                     year={year}
                                     month={monthNum}
@@ -663,7 +694,7 @@ export default function DashboardPage() {
                                       endDate={proc.endDate}
                                       completedDate={proc.completedDate}
                                       color={proc.processType.color}
-                                      staffName={proc.staff?.name ?? null}
+                                      staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)}
                                       processName={proc.processType.name}
                                       year={year}
                                       month={monthNum}
@@ -826,6 +857,7 @@ export default function DashboardPage() {
           bridgeName={editTarget.bridgeName}
           projectName={editTarget.projectName}
           onSave={handleModalSave}
+          onDelete={handleProcessDelete}
           onClose={() => setEditTarget(null)}
         />
       )}

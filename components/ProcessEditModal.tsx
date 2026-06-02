@@ -4,11 +4,13 @@ import { toInputDate } from "@/lib/utils";
 
 interface Staff { id: number; name: string; }
 interface ProcessType { id: number; name: string; color: string; }
+interface ProcessRecordStaffMember { staffId: number; staff: Staff; }
 interface ProcessRecord {
   id: number;
   processTypeId: number;
   processType: ProcessType;
   staffId: number | null;
+  staffMembers?: ProcessRecordStaffMember[];
   status: string;
   startDate: string | null;
   endDate: string | null;
@@ -23,33 +25,56 @@ interface Props {
   projectName: string;
   onSave: (data: {
     id: number;
-    staffId: number | null;
+    staffIds: number[];
     startDate: string | null;
     endDate: string | null;
     completedDate: string | null;
     note: string | null;
   }) => void;
+  onDelete?: (id: number) => void;
   onClose: () => void;
 }
 
-export default function ProcessEditModal({ record, staff, bridgeName, projectName, onSave, onClose }: Props) {
+export default function ProcessEditModal({ record, staff, bridgeName, projectName, onSave, onDelete, onClose }: Props) {
+  const initialStaffIds =
+    record.staffMembers && record.staffMembers.length > 0
+      ? record.staffMembers.map((sm) => sm.staffId)
+      : record.staffId
+      ? [record.staffId]
+      : [];
+
+  const [selectedStaffIds, setSelectedStaffIds] = useState<number[]>(initialStaffIds);
   const [form, setForm] = useState({
-    staffId: record.staffId?.toString() ?? "",
     startDate: toInputDate(record.startDate),
     endDate: toInputDate(record.endDate),
     completedDate: toInputDate(record.completedDate),
     note: record.note ?? "",
   });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const toggleStaff = (id: number) => {
+    setSelectedStaffIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
 
   const handleSave = () => {
     onSave({
       id: record.id,
-      staffId: form.staffId ? parseInt(form.staffId) : null,
+      staffIds: selectedStaffIds,
       startDate: form.startDate || null,
       endDate: form.endDate || null,
       completedDate: form.completedDate || null,
       note: form.note || null,
     });
+  };
+
+  const handleDelete = () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    onDelete?.(record.id);
   };
 
   return (
@@ -81,15 +106,24 @@ export default function ProcessEditModal({ record, staff, bridgeName, projectNam
         {/* フォーム */}
         <div className="p-5 space-y-3">
           <div>
-            <label className="block text-xs text-gray-500 mb-1">担当者</label>
-            <select
-              value={form.staffId}
-              onChange={(e) => setForm((f) => ({ ...f, staffId: e.target.value }))}
-              className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
-            >
-              <option value="">未定</option>
-              {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <label className="block text-xs text-gray-500 mb-1">担当者（複数選択可）</label>
+            <div className="border border-gray-300 rounded px-3 py-2 max-h-36 overflow-y-auto space-y-1">
+              {staff.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 cursor-pointer text-sm select-none">
+                  <input
+                    type="checkbox"
+                    checked={selectedStaffIds.includes(s.id)}
+                    onChange={() => toggleStaff(s.id)}
+                    className="accent-blue-600"
+                  />
+                  <span>{s.name}</span>
+                </label>
+              ))}
+              {staff.length === 0 && <span className="text-xs text-gray-400">担当者が登録されていません</span>}
+            </div>
+            {selectedStaffIds.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1">未選択（未定）</p>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -133,13 +167,30 @@ export default function ProcessEditModal({ record, staff, bridgeName, projectNam
         </div>
 
         {/* フッター */}
-        <div className="px-5 py-4 border-t border-gray-200 flex justify-end gap-2">
-          <button onClick={onClose} className="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50">
-            キャンセル
-          </button>
-          <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
-            保存
-          </button>
+        <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-between gap-2">
+          {onDelete && (
+            <button
+              onClick={handleDelete}
+              className={`text-sm px-3 py-2 rounded border transition-colors ${
+                confirmDelete
+                  ? "bg-red-600 text-white border-red-600 hover:bg-red-700"
+                  : "border-red-300 text-red-500 hover:bg-red-50"
+              }`}
+            >
+              {confirmDelete ? "本当に削除する" : "削除"}
+            </button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <button
+              onClick={() => { setConfirmDelete(false); onClose(); }}
+              className="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50"
+            >
+              キャンセル
+            </button>
+            <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
+              保存
+            </button>
+          </div>
         </div>
       </div>
     </div>

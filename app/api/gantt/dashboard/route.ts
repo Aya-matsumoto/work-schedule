@@ -14,13 +14,13 @@ export async function GET(req: NextRequest) {
       orderBy: [{ displayOrder: "asc" }, { createdAt: "desc" }],
       include: {
         processes: {
-          include: { processType: true, staff: true },
+          include: { processType: true, staff: true, staffMembers: { include: { staff: true } } },
           orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
         },
         bridges: {
           include: {
             processes: {
-              include: { processType: true, staff: true },
+              include: { processType: true, staff: true, staffMembers: { include: { staff: true } } },
               orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
             },
             // 自動割り振り結果も含める
