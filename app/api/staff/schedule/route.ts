@@ -36,9 +36,11 @@ export async function GET(req: NextRequest) {
         },
         // junction table 経由の工程（複数担当者の2人目以降）
         processRecords: {
+          where: {
+            processRecord: processWhereClause,
+          },
           include: {
             processRecord: {
-              where: processWhereClause,
               include: processInclude,
             },
           },
