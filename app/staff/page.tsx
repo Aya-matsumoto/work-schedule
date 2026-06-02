@@ -12,6 +12,7 @@ interface ProcessRecord {
   processTypeId: number;
   processType: { id: number; name: string; color: string };
   staffId: number | null;
+  staffMembers?: { staffId: number; staff: { id: number; name: string } }[];
   status: string;
   startDate: string | null;
   endDate: string | null;
@@ -168,11 +169,14 @@ export default function StaffPage() {
     try {
       const allProcs = staffList.flatMap((s) => s.processes);
       const rec = allProcs.find((p) => p.id === recordId);
+      const staffIds = rec?.staffMembers && rec.staffMembers.length > 0
+        ? rec.staffMembers.map((sm) => sm.staffId)
+        : rec?.staffId ? [rec.staffId] : [];
       await fetch(`/api/processes/${recordId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          staffId: rec?.staffId ?? null,
+          staffIds,
           startDate: newStart,
           endDate: newEnd,
           completedDate: rec?.completedDate ?? null,
@@ -186,34 +190,28 @@ export default function StaffPage() {
   // 工程編集モーダル 保存
   const handleProcessSave = useCallback(async (data: {
     id: number;
-    staffId: number | null;
+    staffIds: number[];
     startDate: string | null;
     endDate: string | null;
     completedDate: string | null;
     note: string | null;
   }) => {
     setEditTarget(null);
-    const rec = staffList.flatMap((s) => s.processes).find((p) => p.id === data.id);
     const status = data.completedDate
       ? "COMPLETED"
       : data.startDate
       ? "IN_PROGRESS"
       : "NOT_STARTED";
-    // 画面を即時更新
-    setStaffList((prev) => prev.map((s) => ({
-      ...s,
-      processes: s.processes.map((p) =>
-        p.id === data.id ? { ...p, ...data, status } : p
-      ),
-    })));
     try {
       await fetch(`/api/processes/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, status }),
+        body: JSON.stringify({ staffIds: data.staffIds, startDate: data.startDate, endDate: data.endDate, completedDate: data.completedDate, note: data.note, status }),
       });
+      // 担当者変更でバーの表示が変わるため再ロード
+      loadSchedule();
     } catch { loadSchedule(); }
-  }, [staffList, loadSchedule]);
+  }, [loadSchedule]);
 
   // 空き確認：指定日に予定がない担当者を判定
   function isAvailable(s: StaffWithSchedule): boolean {
