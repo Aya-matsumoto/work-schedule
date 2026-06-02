@@ -12,7 +12,7 @@ interface Props {
 
 export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props) {
   const [open, setOpen] = useState(false);
-  const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; minWidth: number }>({ top: 0, left: 0, minWidth: 0 });
+  const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; minWidth: number; maxHeight: number }>({ top: 0, left: 0, minWidth: 0, maxHeight: 280 });
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -29,10 +29,17 @@ export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props
   const handleOpen = () => {
     if (!open && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const maxH = Math.min(280, Math.max(spaceBelow, spaceAbove) - 8);
+      const showAbove = spaceBelow < 160 && spaceAbove > spaceBelow;
       setDropdownStyle({
-        top: rect.bottom + window.scrollY + 4,
+        top: showAbove
+          ? rect.top + window.scrollY - maxH - 4
+          : rect.bottom + window.scrollY + 4,
         left: rect.left + window.scrollX,
         minWidth: rect.width,
+        maxHeight: maxH,
       });
     }
     setOpen((v) => !v);
@@ -63,7 +70,7 @@ export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props
         <div
           data-multistaff-dropdown
           className="fixed z-[9999] bg-white border border-gray-200 rounded shadow-lg py-1"
-          style={{ top: dropdownStyle.top, left: dropdownStyle.left, minWidth: dropdownStyle.minWidth }}
+          style={{ top: dropdownStyle.top, left: dropdownStyle.left, minWidth: dropdownStyle.minWidth, maxHeight: dropdownStyle.maxHeight, overflowY: "auto" }}
         >
           {staff.map((s) => (
             <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 text-sm select-none whitespace-nowrap">
