@@ -451,8 +451,13 @@ export default function AutoAssignPage() {
   if (loading) return <div className="py-12 text-center text-gray-400">読み込み中...</div>;
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-4">工程自動割り振り</h1>
+    <div className="d3-body">
+      <div className="d3-headrow">
+        <div>
+          <h1 className="d3-h1">工程<span className="em">自動割り振り</span></h1>
+          <div className="d3-hsub">業務・担当者を選択して、点検完了日をもとに工程を自動割り振りします。</div>
+        </div>
+      </div>
 
       {msg && (
         <div

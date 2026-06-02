@@ -232,42 +232,52 @@ export default function StaffPage() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-5">担当者稼働状況</h1>
+    <div className="d3-body">
+      <div className="d3-headrow">
+        <div>
+          <h1 className="d3-h1">担当者<span className="em">稼働状況</span></h1>
+          <div className="d3-hsub">担当者ごとの月間稼働を確認し、空き状況から予定を追加できます</div>
+        </div>
+      </div>
 
       {/* 月ナビ & 空き確認 */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <button onClick={() => setMonth(prevMonth(month))} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50">← 前月</button>
-        <button onClick={() => setMonth(currentMonth())} className="border border-gray-300 rounded px-3 py-1 text-sm text-blue-600 font-medium hover:bg-gray-50">今月</button>
-        <span className="font-bold text-gray-700 text-lg">{year}年{monthNum}月</span>
-        <button onClick={() => setMonth(nextMonth(month))} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50">翌月 →</button>
-
-        <div className="ml-4 flex items-center gap-2">
-          <label className="text-sm text-gray-600">空き確認日：</label>
-          <input type="date" value={checkDate} onChange={(e) => setCheckDate(e.target.value)} className="border border-gray-300 rounded px-3 py-1 text-sm" />
-          {checkDate && <button onClick={() => setCheckDate("")} className="text-sm text-gray-400 hover:text-gray-600">クリア</button>}
+      <div className="d3-subrow">
+        <div className="d3-month">
+          <button className="d3-mbtn" onClick={() => setMonth(prevMonth(month))}>← 前月</button>
+          <button className="d3-mbtn" onClick={() => setMonth(currentMonth())}>今月</button>
+          <span className="d3-mtitle"><span className="curr">{year}年{monthNum}月</span></span>
+          <button className="d3-mbtn" onClick={() => setMonth(nextMonth(month))}>翌月 →</button>
         </div>
-
-        <p className="text-xs text-gray-400 ml-2">ガントの空欄をクリックすると予定を追加できます</p>
+        <div className="d3-inlinedate">
+          <span>空き確認日</span>
+          <span className="d3-datebox">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+            <input type="date" value={checkDate} onChange={(e) => setCheckDate(e.target.value)} />
+          </span>
+          {checkDate && <button className="d3-ghost" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => setCheckDate("")}>クリア</button>}
+        </div>
+        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>ガントの空欄をクリックすると予定を追加できます</span>
       </div>
 
       {loading ? (
-        <div className="py-8 text-center text-gray-400">読み込み中...</div>
+        <div className="d3-placeholder"><div className="pi">⏳</div><b>読み込み中...</b></div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="d3-card">
           {staffList.map((s) => {
             const available = isAvailable(s);
             return (
               <div
                 key={s.id}
-                className={`flex items-stretch border-b border-gray-100 last:border-0 ${available ? "bg-green-50" : ""}`}
+                className="d3-row"
+                style={available ? { background: "#F0FDF4" } : {}}
               >
                 {/* 担当者名 */}
-                <div className="flex items-center px-4 py-2" style={{ minWidth: 100, maxWidth: 100 }}>
+                <div className="d3-rl person" style={{ minWidth: 120, maxWidth: 120 }}>
+                  <span className="pdot" style={{ background: s.color }} />
                   <div>
-                    <div className="text-sm font-medium text-gray-700">{s.name}</div>
-                    {available && <div className="text-xs text-green-600">✅ 空き</div>}
-                    {!available && checkDate && <div className="text-xs text-gray-400">予定あり</div>}
+                    <div className="nm">{s.name}</div>
+                    {available && <div style={{ fontSize: 11, color: "#179C5B", fontWeight: 700 }}>✅ 空き</div>}
+                    {!available && checkDate && <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>予定あり</div>}
                   </div>
                 </div>
                 {/* ガントチャート */}
@@ -310,9 +320,7 @@ export default function StaffPage() {
                         />
                       ))}
                       {s.processes.length === 0 && !s.assignments?.length && (
-                        <div className="absolute inset-0 flex items-center px-3">
-                          <span className="text-xs text-gray-300">クリックして予定を追加</span>
-                        </div>
+                        <span className="d3-empty">＋ クリックして予定を追加</span>
                       )}
                     </div>
                   </GanttGrid>

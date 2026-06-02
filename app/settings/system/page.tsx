@@ -44,8 +44,13 @@ export default function SystemSettingsPage() {
   const previewHours = (parseFloat(spanCoef) * 8).toFixed(1);
 
   return (
-    <div className="max-w-lg">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">システム設定</h1>
+    <div className="d3-body">
+      <div className="d3-headrow">
+        <div>
+          <h1 className="d3-h1">システム<span className="em">設定</span></h1>
+          <div className="d3-hsub">径間係数のデフォルト値や年度開始月を設定します。</div>
+        </div>
+      </div>
 
       {msg && (
         <div className={`mb-4 px-4 py-3 rounded text-sm ${msg.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
@@ -56,7 +61,7 @@ export default function SystemSettingsPage() {
       {loading ? (
         <div className="py-8 text-center text-gray-400">読み込み中...</div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6" style={{ maxWidth: 520 }}>
 
           {/* 径間係数 */}
           <div>
@@ -74,7 +79,7 @@ export default function SystemSettingsPage() {
                 max="5"
                 value={spanCoef}
                 onChange={(e) => setSpanCoef(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm w-28"
+                className="d3-input w-28"
               />
               <span className="text-sm text-gray-500">
                 日/径間 = <strong>{previewHours}</strong> 時間/径間
@@ -97,7 +102,7 @@ export default function SystemSettingsPage() {
             <select
               value={fyMonth}
               onChange={(e) => setFyMonth(e.target.value)}
-              className="border border-gray-300 rounded px-3 py-2 text-sm w-28"
+              className="d3-input w-28"
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
                 <option key={m} value={m}>{m}月</option>
@@ -106,11 +111,7 @@ export default function SystemSettingsPage() {
           </div>
 
           <div className="pt-2">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-blue-600 text-white px-6 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
-            >
+            <button onClick={handleSave} disabled={saving} className="d3-primary">
               {saving ? "保存中..." : "保存"}
             </button>
           </div>

@@ -145,9 +145,13 @@ export default function ShiftSettingsPage() {
   if (loading) return <div className="py-8 text-center text-gray-400">読み込み中...</div>;
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-2">担当者シフト・勤務時間設定</h1>
-      <p className="text-sm text-gray-500 mb-5">担当者ごとの出勤曜日と1日の勤務時間を設定します。</p>
+    <div className="d3-body">
+      <div className="d3-headrow">
+        <div>
+          <h1 className="d3-h1">担当者シフト・<span className="em">勤務時間設定</span></h1>
+          <div className="d3-hsub">担当者ごとの出勤曜日と1日の勤務時間を設定します。</div>
+        </div>
+      </div>
 
       <div className="space-y-4">
         {staffList.map((staff) => {

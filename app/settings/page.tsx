@@ -197,16 +197,20 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">マスタ管理</h1>
+    <div className="d3-body">
+      <div className="d3-headrow">
+        <div>
+          <h1 className="d3-h1">マスタ<span className="em">管理</span></h1>
+          <div className="d3-hsub">業務・担当者・工程の基本情報を管理します</div>
+        </div>
+      </div>
       {message && (
-        <div className={`mb-4 px-4 py-3 rounded text-sm ${message.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{message.text}</div>
+        <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-700 ${message.type === "success" ? "d3-msg-ok" : "d3-msg-err"}`} style={{ background: message.type === "success" ? "#E3F6EE" : "#FEE2E2", padding: "12px 16px", borderRadius: 12, marginBottom: 16 }}>{message.text}</div>
       )}
 
-      <div className="flex gap-1 mb-5 border-b border-gray-200">
+      <div className="d3-tabs">
         {tabs.map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-t transition-colors ${tab === t.key ? "bg-white border border-b-white border-gray-200 text-blue-600 -mb-px" : "text-gray-500 hover:text-gray-700"}`}>
+          <button key={t.key} onClick={() => setTab(t.key)} className={`d3-tab${tab === t.key ? " on" : ""}`}>
             {t.label}
           </button>
         ))}
@@ -214,10 +218,10 @@ export default function SettingsPage() {
 
       {/* 業務管理 */}
       {tab === "projects" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="bg-white rounded-lg border border-gray-200 p-5">
-            <h2 className="font-bold text-gray-700 mb-4">{editingProject ? "業務を編集" : "業務を追加"}</h2>
-            <div className="space-y-3">
+        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 24, alignItems: "start" }}>
+          <div className="d3-panel">
+            <h2 style={{ fontWeight: 800, fontSize: 16, marginBottom: 16, color: "var(--ink)" }}>{editingProject ? "業務を編集" : "業務を追加"}</h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[
                 { label: "業務名 *", key: "name", placeholder: "例: 西部地区" },
                 { label: "元請け", key: "client", placeholder: "例: 大日本ダイヤコンサルタント" },
@@ -225,29 +229,29 @@ export default function SettingsPage() {
                 { label: "備考", key: "note", placeholder: "" },
               ].map(({ label, key, placeholder }) => (
                 <div key={key}>
-                  <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                  <input type="text" value={(projectForm as any)[key]} onChange={(e) => setProjectForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full" />
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#5A6080", marginBottom: 6 }}>{label}</label>
+                  <input type="text" value={(projectForm as any)[key]} onChange={(e) => setProjectForm((f) => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} className="d3-input" />
                 </div>
               ))}
               <div>
-                <label className="block text-xs text-gray-500 mb-1">最終提出期限</label>
-                <input type="date" value={projectForm.deadline} onChange={(e) => setProjectForm((f) => ({ ...f, deadline: e.target.value }))} className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full" />
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#5A6080", marginBottom: 6 }}>最終提出期限</label>
+                <input type="date" value={projectForm.deadline} onChange={(e) => setProjectForm((f) => ({ ...f, deadline: e.target.value }))} className="d3-input" />
               </div>
-              <div className="flex gap-2 pt-2">
-                <button onClick={saveProject} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 flex-1">{editingProject ? "更新" : "追加"}</button>
-                {editingProject && <button onClick={() => { setEditingProject(null); setProjectForm({ name: "", client: "", fiscalYear: "", deadline: "", note: "" }); }} className="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50">キャンセル</button>}
+              <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
+                <button onClick={saveProject} className="d3-primary" style={{ flex: 1, justifyContent: "center" }}>{editingProject ? "更新" : "追加"}</button>
+                {editingProject && <button onClick={() => { setEditingProject(null); setProjectForm({ name: "", client: "", fiscalYear: "", deadline: "", note: "" }); }} className="d3-ghost">キャンセル</button>}
               </div>
             </div>
           </div>
-          <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div className="d3-card">
+            <table className="d3-table">
+              <thead>
                 <tr>
-                  <th className="text-center px-2 py-3 text-gray-500 font-medium w-16">順番</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">業務名</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">元請け</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">提出期限</th>
-                  <th className="w-28"></th>
+                  <th style={{ width: 64, textAlign: "center" }}>順番</th>
+                  <th>業務名</th>
+                  <th>元請け</th>
+                  <th>提出期限</th>
+                  <th style={{ width: 112 }}></th>
                 </tr>
               </thead>
               <tbody>

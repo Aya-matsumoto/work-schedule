@@ -499,95 +499,90 @@ export default function DashboardPage() {
   // ─── レンダー ────────────────────────────────────────────────────
 
   return (
-    <div>
+    <div className="d3-body">
       {/* ヘッダー行 */}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-800">工程予定表</h1>
-        <div className="flex items-center gap-2">
+      <div className="d3-headrow">
+        <div>
+          <h1 className="d3-h1">工程<span className="em">予定表</span></h1>
+          <div className="d3-hsub">橋梁ごとの工程スケジュールと進捗を管理します</div>
+        </div>
+        <div className="d3-toolbar">
           {/* ガント / リスト 切り替え */}
-          <div className="flex items-center border border-gray-300 rounded overflow-hidden">
-            <button
-              onClick={() => setView("gantt")}
-              className={`px-4 py-1.5 text-sm transition-colors ${view === "gantt" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-            >
-              📊 ガント
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={`px-4 py-1.5 text-sm transition-colors border-l border-gray-300 ${view === "list" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}
-            >
-              📋 リスト
-            </button>
+          <div className="d3-segwrap">
+            <span className={`d3-seg${view === "gantt" ? " on" : ""}`} onClick={() => setView("gantt")}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h9M4 12h14M4 18h7"/></svg>
+              ガント
+            </span>
+            <span className={`d3-seg${view === "list" ? " on" : ""}`} onClick={() => setView("list")}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>
+              リスト
+            </span>
           </div>
-          <Link href="/settings" className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
-            ＋ 業務を追加
+          <Link href="/settings" className="d3-primary">
+            <span style={{ fontSize: 15 }}>＋</span>業務を追加
           </Link>
         </div>
       </div>
 
       {loading ? (
-        <div className="py-8 text-center text-gray-400">読み込み中...</div>
+        <div className="d3-placeholder"><div className="pi"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 16c4 0 4-6 10-6s6 6 10 6"/><path d="M2 16v3M22 16v3M8 13v6M16 13v6M12 11v8"/></svg></div><b>読み込み中...</b></div>
       ) : projects.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <p className="text-lg">業務がまだ登録されていません</p>
-          <Link href="/settings" className="mt-3 inline-block text-blue-600 hover:underline">マスタ管理へ →</Link>
+        <div className="d3-placeholder">
+          <div className="pi"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 16c4 0 4-6 10-6s6 6 10 6"/><path d="M2 16v3M22 16v3M8 13v6M16 13v6M12 11v8"/></svg></div>
+          <b>業務がまだ登録されていません</b>
+          <Link href="/settings" className="d3-primary">マスタ管理へ →</Link>
         </div>
       ) : view === "gantt" ? (
         /* ═══════════════ ガントチャートビュー ═══════════════ */
         <div>
           {/* 月ナビ + 工程フィルター */}
-          <div className="flex flex-wrap items-start gap-4 mb-3">
-            <div className="flex items-center gap-2">
-              <button onClick={() => setMonth(prevMonth(month))} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50">← 前月</button>
-              <button onClick={() => setMonth(currentMonth())} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50 text-blue-600 font-medium">今月</button>
-              <span className="font-bold text-gray-700 text-lg">{year}年{monthNum}月</span>
-              <button onClick={() => setMonth(nextMonth(month))} className="border border-gray-300 rounded px-3 py-1 text-sm hover:bg-gray-50">翌月 →</button>
-              {saving && <span className="text-xs text-gray-400 ml-2">保存中...</span>}
+          <div className="d3-subrow">
+            <div className="d3-month">
+              <button className="d3-mbtn" onClick={() => setMonth(prevMonth(month))}>← 前月</button>
+              <button className="d3-mbtn" onClick={() => setMonth(currentMonth())}>今月</button>
+              <span className="d3-mtitle"><span className="curr">{year}年{monthNum}月</span></span>
+              <button className="d3-mbtn" onClick={() => setMonth(nextMonth(month))}>翌月 →</button>
+              {saving && <span className="d3-saving">保存中...</span>}
             </div>
-            <div className="ml-auto bg-white border border-gray-200 rounded-lg px-3 py-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="d3-legend">
               <button
+                className={`d3-lg${filterTypeId === null ? " all" : ""}`}
                 onClick={() => setFilterTypeId(null)}
-                className={`text-xs px-2 py-0.5 rounded border transition-colors ${filterTypeId === null ? "bg-gray-700 text-white border-gray-700" : "border-gray-300 text-gray-500 hover:bg-gray-50"}`}
               >
                 全工程
               </button>
               {processTypes.map((pt) => (
                 <button
                   key={pt.id}
+                  className={`d3-lg${filterTypeId === pt.id ? " on" : ""}`}
                   onClick={() => setFilterTypeId(filterTypeId === pt.id ? null : pt.id)}
-                  className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded border transition-colors ${filterTypeId === pt.id ? "border-current font-semibold" : "border-transparent hover:border-gray-200"}`}
-                  style={filterTypeId === pt.id ? { color: pt.color, borderColor: pt.color, backgroundColor: pt.color + "18" } : {}}
+                  style={filterTypeId === pt.id ? { borderColor: pt.color, color: pt.color } : {}}
                 >
-                  <span className="w-3 h-3 rounded-sm inline-block flex-shrink-0" style={{ backgroundColor: pt.color }} />
-                  <span className="text-gray-700">{pt.name}</span>
+                  <span className="sw" style={{ backgroundColor: pt.color }} />
+                  {pt.name}
                 </button>
               ))}
             </div>
           </div>
 
           {/* アコーディオン */}
-          <div className="space-y-3">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {projects.map((project) => {
               const isExpanded = expandedProjectIds.has(project.id);
               return (
                 <div key={project.id}>
                   {/* アコーディオンヘッダー */}
-                  <div
-                    className="flex items-center justify-between bg-gray-100 hover:bg-gray-200 rounded-lg px-4 py-2.5 cursor-pointer transition-colors"
-                    onClick={() => toggleProject(project.id)}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-gray-500 text-sm flex-shrink-0">{isExpanded ? "▼" : "▶"}</span>
-                      <span className="font-bold text-gray-800">{project.name}</span>
-                      {project.client && <span className="text-sm text-gray-500">（{project.client}）</span>}
-                      <span className="text-xs text-gray-400 flex-shrink-0">{project.bridges.length}橋</span>
-                      {project.deadline && (
-                        <span className="text-xs text-gray-400 flex-shrink-0">期限：{formatDate(project.deadline)}</span>
-                      )}
-                    </div>
+                  <div className="d3-sec" onClick={() => toggleProject(project.id)}>
+                    <span className="tri">{isExpanded ? "▼" : "▶"}</span>
+                    <span className="sec-name">{project.name}</span>
+                    {project.client && <span className="sec-client">{project.client}</span>}
+                    <span className="sec-cnt">{project.bridges.length}橋</span>
+                    {project.deadline && (
+                      <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>期限：{formatDate(project.deadline)}</span>
+                    )}
                     <button
+                      className="sec-add"
                       onClick={(e) => { e.stopPropagation(); setAddBridgeProjectId(project.id); }}
-                      className="text-xs border border-blue-400 text-blue-600 px-2 py-1 rounded hover:bg-blue-50 flex-shrink-0 ml-2"
                     >
                       ＋ 橋梁を追加
                     </button>
@@ -595,7 +590,7 @@ export default function DashboardPage() {
 
                   {/* 展開コンテンツ */}
                   {isExpanded && (
-                    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mt-1 ml-4">
+                    <div className="d3-card" style={{ marginLeft: 16 }}>
                       {/* 業務全体行（業務に直接登録） */}
                       <div className="flex items-stretch border-b border-gray-100 group bg-gray-50">
                         <div className="flex items-center px-4 py-1.5 flex-shrink-0" style={{ width: 220 }}>
@@ -633,27 +628,26 @@ export default function DashboardPage() {
 
                       {/* 橋梁がない場合 */}
                       {project.bridges.length === 0 && (
-                        <div className="px-4 py-4 text-center text-gray-400 text-xs">
+                        <div style={{ padding: "16px", textAlign: "center", color: "var(--muted)", fontSize: 12, fontWeight: 600 }}>
                           橋梁が未登録です。上の「＋橋梁を追加」から追加できます。
                         </div>
                       )}
 
                       {/* 橋梁行 */}
                       {project.bridges.map((bridge) => (
-                        <div key={bridge.id} className="flex items-stretch border-b border-gray-100 last:border-0 group">
-                          <div className="flex items-center flex-shrink-0" style={{ width: 220 }}>
+                        <div key={bridge.id} className="d3-row group" style={{ minHeight: 44 }}>
+                          <div className="d3-rl" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                             <button
                               onClick={() => router.push(`/bridges/${bridge.id}`)}
-                              className="flex-1 flex items-center px-4 py-2 text-left hover:bg-blue-50 transition-colors min-w-0 h-full"
+                              style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0 }}
                             >
-                              <div className="min-w-0">
-                                <div className="text-gray-700 font-medium text-sm truncate">{bridge.name}</div>
-                                {bridge.serialNo && <div className="text-xs text-gray-400">{bridge.serialNo}</div>}
-                              </div>
+                              <div className="nm" style={{ truncate: true }}>{bridge.name}</div>
+                              {bridge.serialNo && <div className="no">{bridge.serialNo}</div>}
                             </button>
                             <button
                               onClick={() => handleBridgeDelete(bridge.id, bridge.name)}
-                              className="opacity-0 group-hover:opacity-100 px-2 text-gray-300 hover:text-red-500 transition-all flex-shrink-0"
+                              className="opacity-0 group-hover:opacity-100 transition-all"
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "0 4px", flexShrink: 0 }}
                               title="この橋梁を削除"
                             >
                               🗑
@@ -718,28 +712,28 @@ export default function DashboardPage() {
         /* ═══════════════ リストビュー ═══════════════ */
         <div>
           {/* フィルターバー */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end">
+          <div className="d3-panel" style={{ marginBottom: 16, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" }}>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">橋梁名検索</label>
-              <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="橋梁名・業務名..." className="border border-gray-300 rounded px-3 py-1.5 text-sm w-36" />
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>橋梁名検索</label>
+              <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="橋梁名・業務名..." className="d3-input" style={{ width: 160 }} />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">担当者</label>
-              <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>担当者</label>
+              <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="d3-input" style={{ width: "auto" }}>
                 <option value="">すべて</option>
                 {staffNames.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">現在工程</label>
-              <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>現在工程</label>
+              <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="d3-input" style={{ width: "auto" }}>
                 <option value="">すべて</option>
                 {processNames.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">ステータス</label>
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>ステータス</label>
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="d3-input" style={{ width: "auto" }}>
                 <option value="">すべて</option>
                 <option value="NOT_STARTED">未着手</option>
                 <option value="IN_PROGRESS">作業中</option>
@@ -748,12 +742,12 @@ export default function DashboardPage() {
               </select>
             </div>
             {(filterStaff || filterStatus || filterProcess || searchText) && (
-              <button onClick={() => { setFilterStaff(""); setFilterStatus(""); setFilterProcess(""); setSearchText(""); }} className="text-sm text-gray-400 hover:text-red-500 underline">クリア</button>
+              <button className="d3-ghost" onClick={() => { setFilterStaff(""); setFilterStatus(""); setFilterProcess(""); setSearchText(""); }}>クリア</button>
             )}
-            <div className="ml-auto flex items-center gap-3">
-              <span className="text-sm text-gray-500">{sortedBridges.length}件</span>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 13, color: "var(--muted)", fontWeight: 600 }}>{sortedBridges.length}件</span>
               {selectedBridgeIds.size > 0 && (
-                <button onClick={handleBridgeBulkDelete} className="bg-red-500 text-white px-3 py-1.5 rounded text-sm hover:bg-red-600">
+                <button onClick={handleBridgeBulkDelete} style={{ background: "#EF4444", color: "#fff", border: "none", padding: "8px 14px", borderRadius: 10, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                   🗑 選択削除（{selectedBridgeIds.size}件）
                 </button>
               )}
@@ -761,14 +755,13 @@ export default function DashboardPage() {
           </div>
 
           {/* テーブル */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
+          <div className="d3-card">
+            <table className="d3-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 w-10">
+                  <th style={{ width: 40, textAlign: "center" }}>
                     <input
                       type="checkbox"
-                      className="rounded"
                       checked={sortedBridges.length > 0 && sortedBridges.every((b) => selectedBridgeIds.has(b.id))}
                       ref={(el) => {
                         if (el) el.indeterminate = selectedBridgeIds.size > 0 && !sortedBridges.every((b) => selectedBridgeIds.has(b.id));
@@ -779,26 +772,23 @@ export default function DashboardPage() {
                       }}
                     />
                   </th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">業務名</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">整理番号</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">橋梁名</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">径間数</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">現在工程</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">担当者</th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">完了予定日</th>
-                  <th
-                    className="text-left px-4 py-3 text-gray-600 font-medium cursor-pointer hover:text-blue-600 select-none"
-                    onClick={() => setSortKey(nextSortKey("inspectionDate"))}
-                  >
+                  <th>業務名</th>
+                  <th>整理番号</th>
+                  <th>橋梁名</th>
+                  <th>径間数</th>
+                  <th>現在工程</th>
+                  <th>担当者</th>
+                  <th>完了予定日</th>
+                  <th style={{ cursor: "pointer" }} onClick={() => setSortKey(nextSortKey("inspectionDate"))}>
                     点検完了日{sortIcon("inspectionDate")}
                   </th>
-                  <th className="text-left px-4 py-3 text-gray-600 font-medium">ステータス</th>
-                  <th className="px-2 py-3"></th>
+                  <th>ステータス</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {sortedBridges.length === 0 ? (
-                  <tr><td colSpan={11} className="text-center py-8 text-gray-400">該当する橋梁がありません</td></tr>
+                  <tr><td colSpan={11} style={{ textAlign: "center", padding: "32px", color: "var(--muted)" }}>該当する橋梁がありません</td></tr>
                 ) : sortedBridges.map((bridge) => {
                   const currentProcessName = getCurrentProcess(bridge.processes);
                   const currentRecord = bridge.processes.find((p) => p.processType.name === currentProcessName && !p.completedDate);
@@ -807,13 +797,13 @@ export default function DashboardPage() {
                   return (
                     <tr
                       key={bridge.id}
-                      className={`border-b border-gray-100 cursor-pointer group ${isChecked ? "bg-blue-50" : "hover:bg-gray-50"}`}
+                      className="group"
+                      style={isChecked ? { background: "#F0EFFE" } : {}}
                       onClick={() => router.push(`/bridges/${bridge.id}`)}
                     >
-                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <td style={{ textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
-                          className="rounded"
                           checked={isChecked}
                           onChange={(e) => {
                             const next = new Set(selectedBridgeIds);
@@ -822,25 +812,26 @@ export default function DashboardPage() {
                           }}
                         />
                       </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">{bridge.projectName}</td>
-                      <td className="px-4 py-3 text-gray-500">{bridge.serialNo ?? "-"}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{bridge.name}</td>
-                      <td className="px-4 py-3 text-gray-600 text-center">{bridge.spans ?? "-"}</td>
-                      <td className="px-4 py-3">{currentProcessName}</td>
-                      <td className="px-4 py-3 text-gray-600">
+                      <td style={{ fontSize: 12, color: "var(--muted)" }}>{bridge.projectName}</td>
+                      <td style={{ color: "var(--muted)" }}>{bridge.serialNo ?? "-"}</td>
+                      <td style={{ fontWeight: 700 }}>{bridge.name}</td>
+                      <td style={{ textAlign: "center" }}>{bridge.spans ?? "-"}</td>
+                      <td>{currentProcessName}</td>
+                      <td>
                         {currentRecord
                           ? (currentRecord.staffMembers && currentRecord.staffMembers.length > 0
                               ? currentRecord.staffMembers.map((sm) => sm.staff.name).join("・")
                               : currentRecord.staff?.name ?? "-")
                           : "-"}
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{currentRecord?.endDate ? formatDate(currentRecord.endDate) : "-"}</td>
-                      <td className="px-4 py-3 text-gray-600">{bridge.inspectionDate ? formatDate(bridge.inspectionDate) : "-"}</td>
-                      <td className="px-4 py-3"><StatusBadge status={overallStatus} /></td>
-                      <td className="px-2 py-3 text-right">
+                      <td>{currentRecord?.endDate ? formatDate(currentRecord.endDate) : "-"}</td>
+                      <td>{bridge.inspectionDate ? formatDate(bridge.inspectionDate) : "-"}</td>
+                      <td><StatusBadge status={overallStatus} /></td>
+                      <td style={{ textAlign: "right" }}>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleBridgeDelete(bridge.id, bridge.name); }}
-                          className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 transition-all text-base px-1"
+                          className="opacity-0 group-hover:opacity-100 transition-all"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 14, padding: "0 4px" }}
                           title="この橋梁を削除"
                         >
                           🗑

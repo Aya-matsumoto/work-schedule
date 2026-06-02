@@ -139,18 +139,24 @@ export default function BridgeDetailPage() {
   if (!bridge) return <div className="py-8 text-center text-red-500">橋梁が見つかりません</div>;
 
   return (
-    <div>
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-        <Link href="/" className="hover:text-blue-600">ダッシュボード</Link>
-        <span>›</span>
-        <Link href={`/projects/${bridge.project.id}`} className="hover:text-blue-600">{bridge.project.name}</Link>
-        <span>›</span>
-        <span>{bridge.name}</span>
+    <div className="d3-body">
+      <div className="d3-headrow">
+        <div>
+          <div className="flex items-center gap-2 text-xs mb-1" style={{ color: "var(--muted)" }}>
+            <Link href="/" className="hover:underline">ダッシュボード</Link>
+            <span>›</span>
+            <Link href={`/projects/${bridge.project.id}`} className="hover:underline">{bridge.project.name}</Link>
+            <span>›</span>
+            <span>{bridge.name}</span>
+          </div>
+          <h1 className="d3-h1"><span className="em">{bridge.name}</span></h1>
+          <div className="d3-hsub">{bridge.project.name}</div>
+        </div>
       </div>
 
       {/* 橋梁基本情報 */}
       <div className="bg-white rounded-lg border border-gray-200 p-5 mb-5">
-        <h2 className="font-bold text-gray-700 mb-4">橋梁基本情報</h2>
+        <h2 className="font-semibold mb-4" style={{ color: "var(--ink)", fontSize: 14 }}>橋梁基本情報</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: "橋梁名 *", key: "name", type: "text" },
@@ -159,39 +165,39 @@ export default function BridgeDetailPage() {
             { label: "点検完了日", key: "inspectionDate", type: "date" },
           ].map(({ label, key, type }) => (
             <div key={key}>
-              <label className="block text-xs text-gray-500 mb-1">{label}</label>
+              <label className="block text-xs mb-1" style={{ color: "var(--muted)" }}>{label}</label>
               <input
                 type={type}
                 value={(bridgeForm as any)[key]}
                 onChange={(e) => { setBridgeForm((f) => ({ ...f, [key]: e.target.value })); setIsDirty(true); }}
-                className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
+                className="d3-input w-full"
               />
             </div>
           ))}
           <div className="col-span-2 md:col-span-4">
-            <label className="block text-xs text-gray-500 mb-1">点検メモ</label>
+            <label className="block text-xs mb-1" style={{ color: "var(--muted)" }}>点検メモ</label>
             <input type="text" value={bridgeForm.inspectionNote}
               onChange={(e) => { setBridgeForm((f) => ({ ...f, inspectionNote: e.target.value })); setIsDirty(true); }}
-              className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full" />
+              className="d3-input w-full" />
           </div>
         </div>
       </div>
 
       {/* 工程一覧 */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-5">
-        <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
-          <h2 className="font-bold text-gray-700">工程スケジュール</h2>
+        <div className="px-5 py-3 border-b border-gray-100">
+          <h2 className="font-semibold" style={{ color: "var(--ink)", fontSize: 14 }}>工程スケジュール</h2>
         </div>
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead style={{ background: "var(--surface)" }} className="border-b border-gray-100">
             <tr>
-              <th className="text-left px-4 py-2 text-gray-600 font-medium w-28">工程</th>
-              <th className="text-left px-4 py-2 text-gray-600 font-medium w-24">担当者</th>
-              <th className="text-left px-4 py-2 text-gray-600 font-medium w-30">着手予定日</th>
-              <th className="text-left px-4 py-2 text-gray-600 font-medium w-30">完了予定日</th>
-              <th className="text-left px-4 py-2 text-gray-600 font-medium w-30">完了日</th>
-              <th className="text-left px-4 py-2 text-gray-600 font-medium w-20">状態</th>
-              <th className="text-left px-4 py-2 text-gray-600 font-medium">備考</th>
+              <th className="text-left px-4 py-2 font-medium w-28" style={{ color: "var(--muted)", fontSize: 12 }}>工程</th>
+              <th className="text-left px-4 py-2 font-medium w-24" style={{ color: "var(--muted)", fontSize: 12 }}>担当者</th>
+              <th className="text-left px-4 py-2 font-medium w-30" style={{ color: "var(--muted)", fontSize: 12 }}>着手予定日</th>
+              <th className="text-left px-4 py-2 font-medium w-30" style={{ color: "var(--muted)", fontSize: 12 }}>完了予定日</th>
+              <th className="text-left px-4 py-2 font-medium w-30" style={{ color: "var(--muted)", fontSize: 12 }}>完了日</th>
+              <th className="text-left px-4 py-2 font-medium w-20" style={{ color: "var(--muted)", fontSize: 12 }}>状態</th>
+              <th className="text-left px-4 py-2 font-medium" style={{ color: "var(--muted)", fontSize: 12 }}>備考</th>
               <th className="w-10"></th>
             </tr>
           </thead>
@@ -245,10 +251,9 @@ export default function BridgeDetailPage() {
 
       {/* 保存ボタン */}
       <div className="flex items-center gap-4">
-        {isDirty && <span className="text-amber-600 text-sm">⚠ 未保存の変更があります</span>}
+        {isDirty && <span className="text-sm" style={{ color: "#B45309" }}>⚠ 未保存の変更があります</span>}
         {message && <span className={`text-sm ${message.type === "success" ? "text-green-600" : "text-red-600"}`}>{message.text}</span>}
-        <button onClick={handleSave} disabled={saving || !isDirty}
-          className="ml-auto bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+        <button onClick={handleSave} disabled={saving || !isDirty} className="d3-primary ml-auto">
           {saving ? "保存中..." : "一括保存"}
         </button>
       </div>

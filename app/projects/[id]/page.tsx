@@ -58,46 +58,46 @@ export default function ProjectPage() {
   });
 
   return (
-    <div>
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-        <Link href="/" className="hover:text-blue-600">ダッシュボード</Link>
-        <span>›</span>
-        <span>{project.name}</span>
-      </div>
-      <div className="flex items-start justify-between mb-5">
+    <div className="d3-body">
+      <div className="d3-headrow">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">{project.name}</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {project.client && <span className="mr-2">{project.client}</span>}
+          <div className="flex items-center gap-2 text-xs mb-1" style={{ color: "var(--muted)" }}>
+            <Link href="/" className="hover:underline">ダッシュボード</Link>
+            <span>›</span>
+            <span>{project.name}</span>
+          </div>
+          <h1 className="d3-h1"><span className="em">{project.name}</span></h1>
+          <div className="d3-hsub">
+            {project.client && <span className="mr-3">{project.client}</span>}
             橋梁数：{project.bridges.length}橋
             {project.deadline && `　期限：${formatDate(project.deadline)}`}
-          </p>
+          </div>
         </div>
       </div>
 
       {/* フィルター */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end">
+      <div className="d3-panel mb-4 flex flex-wrap gap-3 items-end">
         <div>
-          <label className="block text-xs text-gray-500 mb-1">橋梁名検索</label>
-          <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="橋梁名..." className="border border-gray-300 rounded px-3 py-1.5 text-sm w-36" />
+          <label className="block text-xs mb-1" style={{ color: "var(--muted)" }}>橋梁名検索</label>
+          <input type="text" value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="橋梁名..." className="d3-input w-36" />
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">担当者</label>
-          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+          <label className="block text-xs mb-1" style={{ color: "var(--muted)" }}>担当者</label>
+          <select value={filterStaff} onChange={(e) => setFilterStaff(e.target.value)} className="d3-input">
             <option value="">すべて</option>
             {staffNames.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">現在工程</label>
-          <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+          <label className="block text-xs mb-1" style={{ color: "var(--muted)" }}>現在工程</label>
+          <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="d3-input">
             <option value="">すべて</option>
             {processNames.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs text-gray-500 mb-1">ステータス</label>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="border border-gray-300 rounded px-3 py-1.5 text-sm">
+          <label className="block text-xs mb-1" style={{ color: "var(--muted)" }}>ステータス</label>
+          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="d3-input">
             <option value="">すべて</option>
             <option value="NOT_STARTED">未着手</option>
             <option value="IN_PROGRESS">作業中</option>
@@ -106,27 +106,27 @@ export default function ProjectPage() {
           </select>
         </div>
         {(filterStaff || filterStatus || filterProcess || searchText) && (
-          <button onClick={() => { setFilterStaff(""); setFilterStatus(""); setFilterProcess(""); setSearchText(""); }} className="text-sm text-gray-400 hover:text-red-500 underline">クリア</button>
+          <button onClick={() => { setFilterStaff(""); setFilterStatus(""); setFilterProcess(""); setSearchText(""); }} className="d3-ghost">クリア</button>
         )}
-        <span className="ml-auto text-sm text-gray-500">{filteredBridges.length}件</span>
+        <span className="ml-auto text-sm" style={{ color: "var(--muted)" }}>{filteredBridges.length}件</span>
       </div>
 
       {/* テーブル */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 border-b border-gray-200">
+      <div className="d3-card">
+        <table className="d3-table">
+          <thead>
             <tr>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">整理番号</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">橋梁名</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">現在工程</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">担当者</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">完了予定日</th>
-              <th className="text-left px-4 py-3 text-gray-600 font-medium">ステータス</th>
+              <th>整理番号</th>
+              <th>橋梁名</th>
+              <th>現在工程</th>
+              <th>担当者</th>
+              <th>完了予定日</th>
+              <th>ステータス</th>
             </tr>
           </thead>
           <tbody>
             {filteredBridges.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-8 text-gray-400">該当する橋梁がありません</td></tr>
+              <tr><td colSpan={6} className="text-center py-8" style={{ color: "var(--muted)" }}>該当する橋梁がありません</td></tr>
             ) : filteredBridges.map((bridge) => {
               const currentProcessName = getCurrentProcess(bridge.processes);
               const currentRecord = bridge.processes.find((p) => p.processType.name === currentProcessName && !p.completedDate);
@@ -136,13 +136,13 @@ export default function ProjectPage() {
                 : bridge.processes.some((p) => p.startDate) ? "IN_PROGRESS"
                 : "NOT_STARTED";
               return (
-                <tr key={bridge.id} className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer" onClick={() => router.push(`/bridges/${bridge.id}`)}>
-                  <td className="px-4 py-3 text-gray-500">{bridge.serialNo ?? "-"}</td>
-                  <td className="px-4 py-3 font-medium text-gray-800">{bridge.name}</td>
-                  <td className="px-4 py-3">{currentProcessName}</td>
-                  <td className="px-4 py-3 text-gray-600">{currentRecord?.staff?.name ?? "-"}</td>
-                  <td className="px-4 py-3 text-gray-600">{currentRecord?.endDate ? formatDate(currentRecord.endDate) : "-"}</td>
-                  <td className="px-4 py-3"><StatusBadge status={overallStatus} /></td>
+                <tr key={bridge.id} className="cursor-pointer hover:bg-blue-50" onClick={() => router.push(`/bridges/${bridge.id}`)}>
+                  <td style={{ color: "var(--muted)" }}>{bridge.serialNo ?? "-"}</td>
+                  <td className="font-medium" style={{ color: "var(--ink)" }}>{bridge.name}</td>
+                  <td>{currentProcessName}</td>
+                  <td style={{ color: "var(--muted)" }}>{currentRecord?.staff?.name ?? "-"}</td>
+                  <td style={{ color: "var(--muted)" }}>{currentRecord?.endDate ? formatDate(currentRecord.endDate) : "-"}</td>
+                  <td><StatusBadge status={overallStatus} /></td>
                 </tr>
               );
             })}

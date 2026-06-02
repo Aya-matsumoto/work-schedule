@@ -104,11 +104,13 @@ export default function BridgeSettingsPage() {
   };
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-800 mb-2">橋梁別 径間数・係数設定</h1>
-      <p className="text-sm text-gray-500 mb-5">
-        橋梁ごとに径間数と径間係数を設定します。必要時間 = 径間数 × 係数 × 8時間
-      </p>
+    <div className="d3-body">
+      <div className="d3-headrow">
+        <div>
+          <h1 className="d3-h1">橋梁別 径間数・<span className="em">係数設定</span></h1>
+          <div className="d3-hsub">橋梁ごとに径間数と径間係数を設定します。必要時間 = 径間数 × 係数 × 8時間</div>
+        </div>
+      </div>
 
       {msg && (
         <div className="mb-4 px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded text-sm">{msg}</div>
