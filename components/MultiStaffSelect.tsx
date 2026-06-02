@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface Staff { id: number; name: string; }
 
@@ -11,15 +12,31 @@ interface Props {
 
 export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; minWidth: number }>({ top: 0, left: 0, minWidth: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
+        const target = e.target as HTMLElement;
+        if (!target.closest("[data-multistaff-dropdown]")) setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  const handleOpen = () => {
+    if (!open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownStyle({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        minWidth: rect.width,
+      });
+    }
+    setOpen((v) => !v);
+  };
 
   const toggle = (id: number) => {
     onChange(
@@ -30,24 +47,26 @@ export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props
   const label =
     selectedIds.length === 0
       ? "未定"
-      : staff
-          .filter((s) => selectedIds.includes(s.id))
-          .map((s) => s.name)
-          .join("・");
+      : staff.filter((s) => selectedIds.includes(s.id)).map((s) => s.name).join("・");
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={handleOpen}
         className="border border-gray-300 rounded px-2 py-1 text-sm w-full text-left truncate hover:border-blue-400 focus:outline-none focus:border-blue-500"
       >
         {label}
       </button>
-      {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 bg-white border border-gray-200 rounded shadow-lg py-1 min-w-max">
+      {open && typeof window !== "undefined" && createPortal(
+        <div
+          data-multistaff-dropdown
+          className="fixed z-[9999] bg-white border border-gray-200 rounded shadow-lg py-1"
+          style={{ top: dropdownStyle.top, left: dropdownStyle.left, minWidth: dropdownStyle.minWidth }}
+        >
           {staff.map((s) => (
-            <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 text-sm select-none">
+            <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 text-sm select-none whitespace-nowrap">
               <input
                 type="checkbox"
                 checked={selectedIds.includes(s.id)}
@@ -58,8 +77,9 @@ export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props
             </label>
           ))}
           {staff.length === 0 && <span className="px-3 py-1.5 text-xs text-gray-400">担当者未登録</span>}
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
