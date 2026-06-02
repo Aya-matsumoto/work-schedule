@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
+import MultiStaffSelect from "@/components/MultiStaffSelect";
 import { toInputDate } from "@/lib/utils";
 
 interface Staff { id: number; name: string; }
@@ -13,6 +14,8 @@ interface ProcessRecord {
   processTypeId: number;
   processType: ProcessType;
   staffId: number | null;
+  staffIds: number[];
+  staffMembers?: { staffId: number; staff: { id: number; name: string } }[];
   status: string;
   startDate: string | null;
   endDate: string | null;
@@ -63,9 +66,14 @@ export default function BridgeDetailPage() {
       for (const pt of typesData) {
         const matching = existing.filter((p: ProcessRecord) => p.processTypeId === pt.id);
         if (matching.length === 0) {
-          rows.push({ id: null, processTypeId: pt.id, processType: pt, staffId: null, status: "NOT_STARTED", startDate: null, endDate: null, completedDate: null, note: null, iteration: 1 });
+          rows.push({ id: null, processTypeId: pt.id, processType: pt, staffId: null, staffIds: [], status: "NOT_STARTED", startDate: null, endDate: null, completedDate: null, note: null, iteration: 1 });
         } else {
-          for (const m of matching) rows.push({ ...m, isDirty: false });
+          for (const m of matching) {
+            const staffIds = m.staffMembers && m.staffMembers.length > 0
+              ? m.staffMembers.map((sm: { staffId: number }) => sm.staffId)
+              : m.staffId ? [m.staffId] : [];
+            rows.push({ ...m, staffIds, isDirty: false });
+          }
         }
       }
       setFormProcesses(rows);
@@ -91,7 +99,7 @@ export default function BridgeDetailPage() {
       const nextIteration = sameType.length + 1;
       const insertIdx = prev.map((p, i) => p.processTypeId === processTypeId ? i : -1).filter(i => i >= 0).at(-1) ?? prev.length - 1;
       const next = [...prev];
-      next.splice(insertIdx + 1, 0, { id: null, processTypeId, processType, staffId: null, status: "NOT_STARTED", startDate: null, endDate: null, completedDate: null, note: null, iteration: nextIteration, isDirty: true });
+      next.splice(insertIdx + 1, 0, { id: null, processTypeId, processType, staffId: null, staffIds: [], status: "NOT_STARTED", startDate: null, endDate: null, completedDate: null, note: null, iteration: nextIteration, isDirty: true });
       return next;
     });
     setIsDirty(true);
@@ -108,9 +116,9 @@ export default function BridgeDetailPage() {
       });
       for (const row of formProcesses) {
         if (!row.isDirty && row.id !== null) continue;
-        const payload = { processTypeId: row.processTypeId, staffId: row.staffId, status: row.status, startDate: row.startDate || null, endDate: row.endDate || null, completedDate: row.completedDate || null, note: row.note || null, iteration: row.iteration };
+        const payload = { processTypeId: row.processTypeId, staffIds: row.staffIds, status: row.status, startDate: row.startDate || null, endDate: row.endDate || null, completedDate: row.completedDate || null, note: row.note || null, iteration: row.iteration };
         if (row.id === null) {
-          if (row.staffId || row.startDate || row.endDate || row.completedDate || row.note) {
+          if (row.staffIds.length > 0 || row.startDate || row.endDate || row.completedDate || row.note) {
             await fetch(`/api/bridges/${params.id}/processes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           }
         } else {
@@ -196,10 +204,18 @@ export default function BridgeDetailPage() {
                   </span>
                 </td>
                 <td className="px-4 py-2">
-                  <select value={row.staffId?.toString() ?? ""} onChange={(e) => handleProcessChange(idx, "staffId", e.target.value || null)} className="border border-gray-300 rounded px-2 py-1 text-sm w-full">
-                    <option value="">未定</option>
-                    {staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <MultiStaffSelect
+                    staff={staff}
+                    selectedIds={row.staffIds}
+                    onChange={(ids) => {
+                      setFormProcesses((prev) => {
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], staffIds: ids, staffId: ids[0] ?? null, isDirty: true };
+                        return next;
+                      });
+                      setIsDirty(true);
+                    }}
+                  />
                 </td>
                 <td className="px-4 py-2">
                   <input type="date" value={row.startDate ? toInputDate(row.startDate) : ""} onChange={(e) => handleProcessChange(idx, "startDate", e.target.value || null)} className="border border-gray-300 rounded px-2 py-1 text-sm w-full" />

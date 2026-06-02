@@ -827,7 +827,13 @@ export default function DashboardPage() {
                       <td className="px-4 py-3 font-medium text-gray-800">{bridge.name}</td>
                       <td className="px-4 py-3 text-gray-600 text-center">{bridge.spans ?? "-"}</td>
                       <td className="px-4 py-3">{currentProcessName}</td>
-                      <td className="px-4 py-3 text-gray-600">{currentRecord?.staff?.name ?? "-"}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {currentRecord
+                          ? (currentRecord.staffMembers && currentRecord.staffMembers.length > 0
+                              ? currentRecord.staffMembers.map((sm) => sm.staff.name).join("・")
+                              : currentRecord.staff?.name ?? "-")
+                          : "-"}
+                      </td>
                       <td className="px-4 py-3 text-gray-600">{currentRecord?.endDate ? formatDate(currentRecord.endDate) : "-"}</td>
                       <td className="px-4 py-3 text-gray-600">{bridge.inspectionDate ? formatDate(bridge.inspectionDate) : "-"}</td>
                       <td className="px-4 py-3"><StatusBadge status={overallStatus} /></td>
