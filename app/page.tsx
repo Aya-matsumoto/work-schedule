@@ -660,26 +660,36 @@ export default function DashboardPage() {
                                 style={{ height: 36 }}
                                 onClick={(e) => handleGridClick(e, { projectId: project.id, projectName: project.name, bridgeId: bridge.id, bridgeName: bridge.name })}
                               >
-                                {/* 自動割り振りバー */}
-                                {bridge.assignments?.map((a) => (
-                                  <GanttBar
-                                    key={`assign-${a.id}`}
-                                    id={a.id}
-                                    startDate={a.startDate}
-                                    endDate={a.endDate}
-                                    color={a.staff.color}
-                                    staffName={a.staff.name}
-                                    processName="工数割り振り"
-                                    customLabel={`📋 ${a.staff.name}${a.isManual ? " ✏" : ""}`}
-                                    year={year}
-                                    month={monthNum}
-                                    onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
-                                    onClick={(aid) => handleAssignmentBarClick(aid, bridge, project.name)}
-                                  />
-                                ))}
-                                {/* 工程バー */}
+                                {/* 自動割り振りバー：全工程 or 調書作成フィルター時のみ表示 */}
+                                {(() => {
+                                  const choshoType = processTypes.find((pt) => pt.name === "調書作成");
+                                  const show = filterTypeId === null || (choshoType && filterTypeId === choshoType.id);
+                                  if (!show) return null;
+                                  return bridge.assignments?.map((a) => (
+                                    <GanttBar
+                                      key={`assign-${a.id}`}
+                                      id={a.id}
+                                      startDate={a.startDate}
+                                      endDate={a.endDate}
+                                      color={choshoType?.color ?? "#EF4444"}
+                                      staffName={a.staff.name}
+                                      processName="調書作成"
+                                      customLabel={`📋 ${a.staff.name}${a.isManual ? " ✏" : ""}`}
+                                      year={year}
+                                      month={monthNum}
+                                      onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
+                                      onClick={(aid) => handleAssignmentBarClick(aid, bridge, project.name)}
+                                    />
+                                  ));
+                                })()}
+                                {/* 工程バー：割り振りバーがある橋梁の調書作成は非表示（割り振りバーが代替） */}
                                 {bridge.processes
                                   .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
+                                  .filter((proc) => {
+                                    const hasAssignments = (bridge.assignments?.length ?? 0) > 0;
+                                    if (hasAssignments && proc.processType.name === "調書作成") return false;
+                                    return true;
+                                  })
                                   .map((proc) => (
                                     <GanttBar
                                       key={proc.id}
