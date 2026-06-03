@@ -35,10 +35,8 @@ export default function MultiStaffSelect({ staff, selectedIds, onChange, singleO
       const maxH = Math.min(280, Math.max(spaceBelow, spaceAbove) - 8);
       const showAbove = spaceBelow < 160 && spaceAbove > spaceBelow;
       setDropdownStyle({
-        top: showAbove
-          ? rect.top + window.scrollY - maxH - 4
-          : rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX,
+        top: showAbove ? rect.top - maxH - 4 : rect.bottom + 4,
+        left: rect.left,
         minWidth: rect.width,
         maxHeight: maxH,
       });
