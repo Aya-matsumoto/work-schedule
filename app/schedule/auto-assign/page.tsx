@@ -188,8 +188,8 @@ export default function AutoAssignPage() {
   const [unassignedBridges, setUnassignedBridges] = useState<{ id: number; name: string; reason: string }[]>([]);
 
   // ガント表示
-  const [ganttYear, setGanttYear] = useState(currentFY);
-  const [ganttMonth, setGanttMonth] = useState(4);
+  const [ganttYear, setGanttYear] = useState(now.getFullYear());
+  const [ganttMonth, setGanttMonth] = useState(now.getMonth() + 1);
   const [filterStaffId, setFilterStaffId] = useState<number | null>(null);
 
   // 連動移動ダイアログ
