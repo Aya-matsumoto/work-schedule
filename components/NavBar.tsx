@@ -44,6 +44,9 @@ export default function NavBar() {
             {link.label}
           </Link>
         ))}
+        <a href="/manual.html" target="_blank" rel="noopener noreferrer">
+          使い方
+        </a>
       </nav>
 
     </div>

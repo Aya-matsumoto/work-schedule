@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>橋梁点検進捗管理システム 利用マニュアル</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --ink: #232A45;
+      --muted: #8B90A8;
+      --line: #ECEDF5;
+      --surface: #F5F5FB;
+      --g1: #6C5CE7;
+      --g2: #8E7BFF;
+      --g3: #00B0C8;
+      --grad: linear-gradient(120deg, #6C5CE7 0%, #8E7BFF 55%, #00B0C8 100%);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans JP', sans-serif;
+      color: var(--ink);
+      background: #FBFBFE;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* ── ヘッダー ── */
+    .cover {
+      background: var(--grad);
+      color: #fff;
+      padding: 28px 48px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .cover::after {
+      content: '';
+      position: absolute;
+      right: -60px; top: -60px;
+      width: 240px; height: 240px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.07);
+    }
+    .cover-tag { font-size: 10px; font-weight: 700; letter-spacing: .1em; opacity: .7; margin-bottom: 4px; }
+    .cover h1 { font-size: 20px; font-weight: 800; line-height: 1.3; }
+    .cover-sub { font-size: 13px; opacity: .8; margin-top: 4px; }
+    .cover-date { font-size: 12px; opacity: .6; white-space: nowrap; position: relative; z-index: 1; }
+
+    /* ── レイアウト ── */
+    .layout { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: #fff;
+      border-right: 1px solid var(--line);
+      padding: 28px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar-title { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--muted); padding: 0 20px 8px; text-transform: uppercase; }
+    .sidebar a {
+      display: block;
+      padding: 7px 20px;
+      font-size: 13px;
+      color: var(--ink);
+      text-decoration: none;
+      border-left: 3px solid transparent;
+      transition: all .15s;
+    }
+    .sidebar a:hover { background: var(--surface); color: var(--g1); border-left-color: var(--g2); }
+    .sidebar a.sub { padding-left: 32px; font-size: 12px; color: var(--muted); }
+    .sidebar a.sub:hover { color: var(--g1); }
+    .sidebar-sep { height: 1px; background: var(--line); margin: 12px 20px; }
+
+    .main { flex: 1; padding: 40px 48px; max-width: 880px; }
+
+    /* ── セクション ── */
+    .section { margin-bottom: 56px; }
+    .section-badge {
+      display: inline-block;
+      background: var(--grad);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      padding: 2px 10px;
+      border-radius: 99px;
+      margin-bottom: 10px;
+    }
+    h2 {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--ink);
+      margin-bottom: 6px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--line);
+    }
+    h2 .em {
+      background: var(--grad);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    h3 { font-size: 15px; font-weight: 700; color: var(--ink); margin: 24px 0 10px; }
+    h4 { font-size: 13px; font-weight: 700; color: var(--g1); margin: 16px 0 6px; }
+    p { margin-bottom: 10px; color: #3D4362; }
+
+    /* ── カード ── */
+    .card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+    .card-title { font-weight: 700; font-size: 14px; margin-bottom: 8px; color: var(--ink); }
+
+    /* ── ステップ ── */
+    .steps { counter-reset: step; list-style: none; padding: 0; }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 14px;
+      margin-bottom: 14px;
+      align-items: flex-start;
+    }
+    .steps li::before {
+      content: counter(step);
+      flex-shrink: 0;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: var(--grad);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .steps li > span { padding-top: 3px; }
+
+    /* ── ポイントボックス ── */
+    .tip {
+      background: #F0EEFF;
+      border-left: 3px solid var(--g1);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 14px 0;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .tip strong { color: var(--g1); }
+    .warn {
+      background: #FFF8EC;
+      border-left: 3px solid #F59E0B;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 14px 0;
+      font-size: 13px;
+    }
+    .warn strong { color: #B45309; }
+
+    /* ── ナビメニュー表 ── */
+    .nav-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }
+    .nav-item {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .nav-item .label { font-weight: 700; font-size: 13px; color: var(--ink); margin-bottom: 4px; }
+    .nav-item .desc { font-size: 12px; color: var(--muted); }
+
+    /* ── テーブル ── */
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+    th { background: var(--surface); text-align: left; padding: 8px 12px; font-weight: 600; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--line); }
+    td { padding: 8px 12px; border-bottom: 1px solid var(--line); color: var(--ink); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+
+    /* ── バッジ ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-blue { background: #EEF2FF; color: #4F46E5; }
+    .badge-green { background: #ECFDF5; color: #059669; }
+    .badge-orange { background: #FFF7ED; color: #EA580C; }
+    .badge-red { background: #FEF2F2; color: #DC2626; }
+    .badge-gray { background: var(--surface); color: var(--muted); }
+
+    /* ── スクリーンショット代替 ── */
+    .screen-mock {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 14px 0;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ── TOC ── */
+    .toc-num { color: var(--muted); margin-right: 6px; font-size: 12px; }
+
+    @media print {
+      .sidebar { display: none; }
+      .main { padding: 20px; max-width: 100%; }
+      .cover { padding: 32px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 表紙 -->
+<div class="cover">
+  <div style="position:relative;z-index:1;">
+    <div class="cover-tag">USER MANUAL</div>
+    <h1>橋梁点検進捗管理システム 利用マニュアル</h1>
+    <div class="cover-sub">担当者・工程・スケジュールを一元管理するWebアプリケーションの操作ガイド</div>
+  </div>
+  <div class="cover-date">2026年6月 作成</div>
+</div>
+
+<!-- サイドバー + 本文 -->
+<div class="layout">
+
+  <!-- サイドバー（目次） -->
+  <nav class="sidebar">
+    <div class="sidebar-title">目次</div>
+    <a href="#overview">1. システム概要</a>
+    <a href="#nav">2. 画面構成・ナビゲーション</a>
+    <div class="sidebar-sep"></div>
+    <a href="#dashboard">3. ダッシュボード</a>
+    <a href="#dashboard-gantt" class="sub">3-1. ガントチャート表示</a>
+    <a href="#dashboard-list" class="sub">3-2. リスト表示</a>
+    <a href="#dashboard-process" class="sub">3-3. 工程の登録・編集</a>
+    <div class="sidebar-sep"></div>
+    <a href="#staff">4. 担当者稼働</a>
+    <a href="#staff-check" class="sub">4-1. 空き状況確認</a>
+    <a href="#staff-add" class="sub">4-2. 予定の追加</a>
+    <div class="sidebar-sep"></div>
+    <a href="#autoassign">5. 工程割り振り</a>
+    <a href="#autoassign-setup" class="sub">5-1. 担当者設定</a>
+    <a href="#autoassign-run" class="sub">5-2. 自動割り振り実行</a>
+    <a href="#autoassign-gantt" class="sub">5-3. ガントで確認・調整</a>
+    <div class="sidebar-sep"></div>
+    <a href="#settings">6. 各種設定</a>
+    <a href="#settings-master" class="sub">6-1. マスタ管理</a>
+    <a href="#settings-shift" class="sub">6-2. シフト設定</a>
+    <a href="#settings-span" class="sub">6-3. 径間係数設定</a>
+    <a href="#settings-system" class="sub">6-4. システム設定</a>
+    <div class="sidebar-sep"></div>
+    <a href="#status">7. ステータス一覧</a>
+  </nav>
+
+  <!-- 本文 -->
+  <main class="main">
+
+    <!-- 1. システム概要 -->
+    <section class="section" id="overview">
+      <div class="section-badge">OVERVIEW</div>
+      <h2><span class="em">システム</span>概要</h2>
+      <p>
+        本システムは、橋梁点検業務における複数の業務・橋梁・担当者のスケジュールを
+        ガントチャート形式で一元管理するWebアプリケーションです。
+      </p>
+
+      <div class="nav-grid" style="margin-top:20px;">
+        <div class="nav-item">
+          <div class="label">📊 工程の見える化</div>
+          <div class="desc">業務・橋梁ごとの工程をガントチャートで把握</div>
+        </div>
+        <div class="nav-item">
+          <div class="label">👥 担当者管理</div>
+          <div class="desc">担当者ごとの稼働状況・空き確認</div>
+        </div>
+        <div class="nav-item">
+          <div class="label">🔄 自動割り振り</div>
+          <div class="desc">点検完了日・シフトをもとに工程を自動配分</div>
+        </div>
+        <div class="nav-item">
+          <div class="label">✏️ 柔軟な編集</div>
+          <div class="desc">ドラッグ&ドロップや直接入力で日程調整</div>
+        </div>
+      </div>
+
+      <h3>対応ブラウザ</h3>
+      <p>Google Chrome / Microsoft Edge（最新版）を推奨します。</p>
+
+      <h3>アクセス方法</h3>
+      <p>ブラウザのアドレスバーにシステムのURLを入力してアクセスしてください。</p>
+    </section>
+
+    <!-- 2. 画面構成 -->
+    <section class="section" id="nav">
+      <div class="section-badge">NAVIGATION</div>
+      <h2>画面構成・<span class="em">ナビゲーション</span></h2>
+      <p>画面上部のナビゲーションバーから各機能にアクセスできます。現在開いているページはメニューが紫色のグラデーションで強調表示されます。</p>
+
+      <table>
+        <thead>
+          <tr><th>メニュー名</th><th>機能概要</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>ダッシュボード</strong></td><td>全業務の工程をガントチャート・リストで一覧表示。工程の登録・編集・削除もここから行います。</td></tr>
+          <tr><td><strong>担当者稼働</strong></td><td>担当者ごとの月間稼働状況を確認。空き日確認や予定の追加が可能です。</td></tr>
+          <tr><td><strong>工程割り振り</strong></td><td>点検完了日をもとに、担当者のシフトを考慮した自動割り振りを実行します。</td></tr>
+          <tr><td><strong>径間係数設定</strong></td><td>業務・橋梁ごとの径間数と径間係数を設定します。</td></tr>
+          <tr><td><strong>シフト設定</strong></td><td>担当者ごとの出勤曜日・1日の標準勤務時間を設定します。</td></tr>
+          <tr><td><strong>システム設定</strong></td><td>径間係数のデフォルト値・年度開始月を設定します。</td></tr>
+          <tr><td><strong>マスタ管理</strong></td><td>担当者・業務・橋梁・工程種別の追加・編集・削除を行います。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 3. ダッシュボード -->
+    <section class="section" id="dashboard">
+      <div class="section-badge">DASHBOARD</div>
+      <h2><span class="em">ダッシュボード</span></h2>
+      <p>アプリを開くと最初に表示される画面です。登録されているすべての業務・橋梁の工程状況を確認できます。</p>
+
+      <h3 id="dashboard-gantt">3-1. ガントチャート表示</h3>
+      <p>画面上部の「ガント」タブが選択されている状態で表示されます。業務ごとにアコーディオン形式で折りたためます。</p>
+
+      <div class="card">
+        <div class="card-title">画面の見方</div>
+        <table>
+          <thead><tr><th>要素</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td>業務名（グレーの帯）</td><td>クリックで橋梁一覧を展開・折りたたみ</td></tr>
+            <tr><td>色付きバー</td><td>工程の期間を表します。色は工程種別ごとに異なります</td></tr>
+            <tr><td>■ 完了マーク</td><td>バーに完了日が設定されている場合、右端に完了日が表示されます</td></tr>
+            <tr><td>土・日列</td><td>薄いグレーで強調表示されます</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>月の切り替え</h4>
+      <p>「← 前月」「翌月 →」ボタンで表示月を変更できます。「今月」ボタンで当月に戻ります。</p>
+
+      <h4>表示の絞り込み</h4>
+      <p>「担当者」「ステータス」のフィルターで表示する工程を絞り込めます。工程種別の凡例をクリックすると、その工程のみ表示することもできます。</p>
+
+      <div class="tip">
+        <strong>ヒント：</strong> ガントバーをドラッグ（左右に引っ張る）すると、日程をそのままずらせます。詳細な編集はバーをクリックしてモーダルから行います。
+      </div>
+
+      <h3 id="dashboard-list">3-2. リスト表示</h3>
+      <p>「リスト」タブに切り替えると、橋梁ごとの工程を表形式で一覧できます。整理番号・担当者・ステータスなどで絞り込み検索が可能です。</p>
+
+      <h4>ステータスバッジの見方</h4>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin: 8px 0 16px;">
+        <span class="badge badge-gray">未着手</span>
+        <span class="badge badge-blue">作業中</span>
+        <span class="badge badge-green">完了</span>
+        <span class="badge badge-red">遅延</span>
+      </div>
+      <p style="font-size:13px; color:var(--muted);">遅延は「完了予定日を過ぎても完了日が未入力」の場合に自動で表示されます。</p>
+
+      <h3 id="dashboard-process">3-3. 工程の登録・編集・削除</h3>
+
+      <h4>工程を新規登録する</h4>
+      <ol class="steps">
+        <li><span>ガントチャートの空白部分をクリックします。</span></li>
+        <li><span>「工程を追加」モーダルが開きます。業務・橋梁・工程種別・担当者・期間を入力します。</span></li>
+        <li><span>担当者は複数選択できます（チェックボックスで選択）。</span></li>
+        <li><span>「保存」ボタンをクリックして登録します。</span></li>
+      </ol>
+
+      <h4>工程を編集する</h4>
+      <ol class="steps">
+        <li><span>ガントバーをクリックして編集モーダルを開きます。</span></li>
+        <li><span>担当者・開始日・完了予定日・完了日・メモを変更できます。</span></li>
+        <li><span>「保存」をクリックして反映します。</span></li>
+      </ol>
+
+      <h4>工程を削除する</h4>
+      <ol class="steps">
+        <li><span>ガントバーをクリックして編集モーダルを開きます。</span></li>
+        <li><span>モーダル内の「削除」ボタンをクリックします。</span></li>
+        <li><span>「本当に削除する」ボタンが表示されるので、再度クリックして確定します（2段階確認）。</span></li>
+      </ol>
+
+      <div class="warn">
+        <strong>注意：</strong> 削除した工程はもとに戻せません。誤操作に注意してください。
+      </div>
+    </section>
+
+    <!-- 4. 担当者稼働 -->
+    <section class="section" id="staff">
+      <div class="section-badge">STAFF</div>
+      <h2>担当者<span class="em">稼働</span></h2>
+      <p>担当者ごとの月間スケジュールをガントチャートで確認できます。特定日の空き状況の確認や、直接予定を追加することもできます。</p>
+
+      <h3 id="staff-check">4-1. 空き状況の確認</h3>
+      <ol class="steps">
+        <li><span>「空き確認日」の日付入力欄に確認したい日付を入力します。</span></li>
+        <li><span>その日に予定が入っていない担当者の行が緑色でハイライトされ「✅ 空き」と表示されます。</span></li>
+        <li><span>「クリア」ボタンでハイライトを解除できます。</span></li>
+      </ol>
+
+      <h3 id="staff-add">4-2. 予定の追加</h3>
+      <ol class="steps">
+        <li><span>追加したい担当者の行のガントエリアをクリックします（クリックした位置が開始日になります）。</span></li>
+        <li><span>「予定を追加」モーダルが開きます。業務・橋梁・工程種別・期間を設定します。</span></li>
+        <li><span>「保存」をクリックして登録します。</span></li>
+      </ol>
+
+      <div class="tip">
+        <strong>ヒント：</strong> ガントバーに表示されている「📋 橋梁名」は工程割り振りで自動割り当てられたバーです。「✏」が付いているものは手動で修正済みです。
+      </div>
+    </section>
+
+    <!-- 5. 工程割り振り -->
+    <section class="section" id="autoassign">
+      <div class="section-badge">AUTO-ASSIGN</div>
+      <h2>工程<span class="em">割り振り</span></h2>
+      <p>担当者のシフト（出勤日・勤務時間）と橋梁の径間数・係数をもとに、点検完了日から工程スケジュールを自動生成します。</p>
+
+      <h3 id="autoassign-setup">5-1. 担当者設定</h3>
+      <ol class="steps">
+        <li><span>左側の業務リストから対象業務を選択します。</span></li>
+        <li><span>「担当者設定」パネルで対象の担当者をクリックして選択します（複数選択可）。選択した担当者は色付きで表示されます。</span></li>
+        <li><span>「担当者を保存」ボタンをクリックして設定を保存します。</span></li>
+      </ol>
+
+      <h3 id="autoassign-run">5-2. 自動割り振り実行</h3>
+      <ol class="steps">
+        <li><span>「橋梁・点検完了日」テーブルで各橋梁の点検完了日を入力します。</span></li>
+        <li><span>「点検完了日の ○ 日後から作業開始」の日数を設定します（デフォルト8日）。</span></li>
+        <li><span>「🔄 自動割り振り実行」ボタンをクリックします。</span></li>
+        <li><span>確認ダイアログが表示されるので「OK」をクリックします。</span></li>
+      </ol>
+
+      <div class="card">
+        <div class="card-title">割り振りのルール</div>
+        <ul style="font-size:13px; padding-left:18px; color:#3D4362;">
+          <li style="margin-bottom:6px;">担当者のシフト設定（出勤曜日・1日の勤務時間）をもとに空き日程を検索します。</li>
+          <li style="margin-bottom:6px;">必要時間 = 径間数 × 径間係数 × 8時間 で計算されます。</li>
+          <li style="margin-bottom:6px;">点検完了日が入力されていない橋梁はスキップされます。</li>
+          <li style="margin-bottom:6px;">担当者未設定の場合は全担当者で実行されます。</li>
+        </ul>
+      </div>
+
+      <div class="warn">
+        <strong>注意：</strong> 同じ業務に対して再実行すると、既存の割り当てが上書きされます。手動修正した内容は消えますのでご注意ください。
+      </div>
+
+      <h3 id="autoassign-gantt">5-3. ガントで確認・調整</h3>
+      <p>割り振り結果は画面下部のガントチャートで確認できます。</p>
+
+      <h4>バーを手動で移動する</h4>
+      <p>ガントバーをドラッグすると日程をずらせます。手動修正したバーには「✏️」が付きます。</p>
+
+      <h4>日程を細かく編集する</h4>
+      <p>バーをクリックすると編集ダイアログが開き、開始日・終了日を直接入力できます。</p>
+
+      <h4>担当者の工程を一括移動する</h4>
+      <ol class="steps">
+        <li><span>担当者フィルターで対象の担当者を選択します。</span></li>
+        <li><span>「📅 ○○ の工程を連動移動」ボタンをクリックします。</span></li>
+        <li><span>移動日数を入力します（マイナス値で前倒し）。</span></li>
+        <li><span>「実行」をクリックして一括移動します。</span></li>
+      </ol>
+    </section>
+
+    <!-- 6. 各種設定 -->
+    <section class="section" id="settings">
+      <div class="section-badge">SETTINGS</div>
+      <h2>各種<span class="em">設定</span></h2>
+
+      <h3 id="settings-master">6-1. マスタ管理</h3>
+      <p>担当者・業務（プロジェクト）・橋梁・工程種別の登録・編集・削除を行います。</p>
+
+      <table>
+        <thead><tr><th>タブ</th><th>管理できる内容</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>担当者</strong></td>
+            <td>氏名・表示色（ガントバーの色）・種別を登録します。</td>
+          </tr>
+          <tr>
+            <td><strong>業務（プロジェクト）</strong></td>
+            <td>業務名・発注者・期限を登録します。業務に紐付く橋梁もここから管理します。</td>
+          </tr>
+          <tr>
+            <td><strong>工程種別</strong></td>
+            <td>工程の名称・表示色・並び順を設定します。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="tip">
+        <strong>橋梁の追加方法：</strong> マスタ管理の「プロジェクト」タブで対象業務を展開し、「橋梁を追加」から登録します。橋梁名・整理番号・径間数・点検完了日を入力できます。
+      </div>
+
+      <h3 id="settings-shift">6-2. シフト設定</h3>
+      <p>担当者ごとの勤務スケジュールを設定します。自動割り振りの計算に使用されます。</p>
+
+      <ol class="steps">
+        <li><span>担当者名をクリックして設定パネルを開きます。</span></li>
+        <li><span>出勤曜日をボタンで選択します（青 = 出勤、白 = 休み）。</span></li>
+        <li><span>1日の標準勤務時間を入力します。</span></li>
+        <li><span>適用開始日を設定します。</span></li>
+        <li><span>「シフトを保存」をクリックして確定します。</span></li>
+      </ol>
+
+      <h4>特定日だけ変更する（個別変更）</h4>
+      <p>シフト設定パネル下部の「個別勤務時間変更」から、特定日のみ勤務時間を上書きできます。勤務時間を「0」にすると休みとして扱われます。</p>
+
+      <h3 id="settings-span">6-3. 径間係数設定</h3>
+      <p>橋梁ごとの径間数と径間係数を設定します。この値が自動割り振りの必要時間計算に使われます。</p>
+
+      <div class="card">
+        <div class="card-title">必要時間の計算式</div>
+        <p style="font-size:14px; font-weight:600; color:var(--g1);">必要時間 = 径間数 × 径間係数 × 8時間</p>
+        <p style="font-size:13px; color:var(--muted); margin-top:6px;">例）径間数4 × 係数0.5 × 8 = <strong>16時間</strong>（2人日）</p>
+      </div>
+
+      <ol class="steps">
+        <li><span>業務名をクリックしてアコーディオンを開きます。</span></li>
+        <li><span>橋梁ごとに径間数・径間係数を入力します。</span></li>
+        <li><span>各行の「保存」ボタンをクリックして確定します。</span></li>
+      </ol>
+
+      <div class="tip">
+        <strong>ヒント：</strong> 未保存の変更がある場合、業務名ヘッダーに「● 未保存あり」と表示されます。アコーディオンを閉じる前に必ず保存してください。
+      </div>
+
+      <h3 id="settings-system">6-4. システム設定</h3>
+      <table>
+        <thead><tr><th>設定項目</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>径間係数のデフォルト値</strong></td>
+            <td>径間係数が未設定の橋梁に適用される初期値です。変更すると全体の基準が変わります。</td>
+          </tr>
+          <tr>
+            <td><strong>年度開始月</strong></td>
+            <td>自動割り振りの対象期間を決める年度の開始月です。通常は4月（4）を設定します。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 7. ステータス一覧 -->
+    <section class="section" id="status">
+      <div class="section-badge">STATUS</div>
+      <h2>ステータス<span class="em">一覧</span></h2>
+
+      <table>
+        <thead><tr><th>ステータス</th><th>表示条件</th><th>対処法</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-gray">未着手</span></td>
+            <td>開始日・完了日ともに未入力</td>
+            <td>開始日を入力すると「作業中」に変わります</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-blue">作業中</span></td>
+            <td>開始日が入力済み・完了日が未入力</td>
+            <td>完了日を入力すると「完了」に変わります</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-green">完了</span></td>
+            <td>完了日が入力済み</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-red">遅延</span></td>
+            <td>完了予定日を過ぎても完了日が未入力</td>
+            <td>完了日を入力するか、完了予定日を修正してください</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div style="border-top: 1px solid var(--line); padding-top: 24px; color: var(--muted); font-size: 12px; text-align: center; margin-top: 20px;">
+      橋梁点検進捗管理システム 利用マニュアル　©2026
+    </div>
+
+  </main>
+</div>
+
+<!-- スムーズスクロール -->
+<script>
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      const el = document.querySelector(a.getAttribute('href'));
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+
+</body>
+</html>
