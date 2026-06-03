@@ -118,72 +118,81 @@ export default function BridgeSettingsPage() {
 
       {loading ? (
         <div className="py-8 text-center text-gray-400">読み込み中...</div>
+      ) : bridges.length === 0 ? (
+        <div className="py-8 text-center text-gray-400">橋梁が登録されていません</div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium">業務名</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium">橋梁名</th>
-                <th className="text-left px-4 py-3 text-gray-600 font-medium">整理番号</th>
-                <th className="text-center px-4 py-3 text-gray-600 font-medium w-28">径間数</th>
-                <th className="text-center px-4 py-3 text-gray-600 font-medium w-32">径間係数</th>
-                <th className="text-center px-4 py-3 text-gray-600 font-medium w-40">必要時間（目安）</th>
-                <th className="px-4 py-3 w-20"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {bridges.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-8 text-gray-400">橋梁が登録されていません</td>
-                </tr>
-              ) : bridges.map((b) => {
-                const edit = edits[b.id];
-                return (
-                  <tr key={b.id} className={`border-b border-gray-100 ${edit?.dirty ? "bg-yellow-50" : "hover:bg-gray-50"}`}>
-                    <td className="px-4 py-2 text-gray-500 text-xs">{b.project.name}</td>
-                    <td className="px-4 py-2 font-medium text-gray-800">{b.name}</td>
-                    <td className="px-4 py-2 text-gray-500">{b.serialNo ?? "-"}</td>
-                    <td className="px-4 py-2 text-center">
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={edit?.spanCount ?? "1"}
-                        onChange={(e) => handleChange(b.id, "spanCount", e.target.value)}
-                        className="border border-gray-300 rounded px-2 py-1 text-sm w-20 text-center"
-                      />
-                      {b.spans != null && String(b.spans) !== (edit?.spanCount ?? "1") && (
-                        <div className="text-xs text-gray-400 mt-0.5">登録値: {b.spans}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-center">
-                      <input
-                        type="number"
-                        min="0.1"
-                        step="0.1"
-                        value={edit?.spanCoefficient ?? "0.5"}
-                        onChange={(e) => handleChange(b.id, "spanCoefficient", e.target.value)}
-                        className="border border-gray-300 rounded px-2 py-1 text-sm w-24 text-center"
-                      />
-                    </td>
-                    <td className="px-4 py-2 text-center text-blue-600 font-medium">
-                      {calcHours(b.id)} 時間
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <button
-                        onClick={() => handleSave(b)}
-                        disabled={!edit?.dirty || saving === b.id}
-                        className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 disabled:opacity-30"
-                      >
-                        {saving === b.id ? "保存中" : "保存"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-5">
+          {/* 業務名ごとにグループ化 */}
+          {Array.from(new Map(bridges.map((b) => [b.project.name, true])).keys()).map((projectName) => {
+            const groupBridges = bridges.filter((b) => b.project.name === projectName);
+            return (
+              <div key={projectName} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                {/* 業務名ヘッダー */}
+                <div className="px-4 py-2.5 border-b border-gray-100" style={{ background: "var(--surface)" }}>
+                  <span className="font-semibold text-sm" style={{ color: "var(--ink)" }}>{projectName}</span>
+                  <span className="ml-2 text-xs" style={{ color: "var(--muted)" }}>{groupBridges.length}橋梁</span>
+                </div>
+                <table className="w-full text-sm">
+                  <thead className="border-b border-gray-100">
+                    <tr>
+                      <th className="text-left px-4 py-2 font-medium" style={{ color: "var(--muted)", fontSize: 12 }}>橋梁名</th>
+                      <th className="text-left px-4 py-2 font-medium" style={{ color: "var(--muted)", fontSize: 12 }}>整理番号</th>
+                      <th className="text-center px-4 py-2 font-medium w-28" style={{ color: "var(--muted)", fontSize: 12 }}>径間数</th>
+                      <th className="text-center px-4 py-2 font-medium w-32" style={{ color: "var(--muted)", fontSize: 12 }}>径間係数</th>
+                      <th className="text-center px-4 py-2 font-medium w-40" style={{ color: "var(--muted)", fontSize: 12 }}>必要時間（目安）</th>
+                      <th className="px-4 py-2 w-20"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupBridges.map((b) => {
+                      const edit = edits[b.id];
+                      return (
+                        <tr key={b.id} className={`border-b border-gray-100 ${edit?.dirty ? "bg-yellow-50" : "hover:bg-gray-50"}`}>
+                          <td className="px-4 py-2 font-medium" style={{ color: "var(--ink)" }}>{b.name}</td>
+                          <td className="px-4 py-2" style={{ color: "var(--muted)" }}>{b.serialNo ?? "-"}</td>
+                          <td className="px-4 py-2 text-center">
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={edit?.spanCount ?? "1"}
+                              onChange={(e) => handleChange(b.id, "spanCount", e.target.value)}
+                              className="border border-gray-300 rounded px-2 py-1 text-sm w-20 text-center"
+                            />
+                            {b.spans != null && String(b.spans) !== (edit?.spanCount ?? "1") && (
+                              <div className="text-xs text-gray-400 mt-0.5">登録値: {b.spans}</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <input
+                              type="number"
+                              min="0.1"
+                              step="0.1"
+                              value={edit?.spanCoefficient ?? "0.5"}
+                              onChange={(e) => handleChange(b.id, "spanCoefficient", e.target.value)}
+                              className="border border-gray-300 rounded px-2 py-1 text-sm w-24 text-center"
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-center font-medium" style={{ color: "var(--g1)" }}>
+                            {calcHours(b.id)} 時間
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            <button
+                              onClick={() => handleSave(b)}
+                              disabled={!edit?.dirty || saving === b.id}
+                              className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 disabled:opacity-30"
+                            >
+                              {saving === b.id ? "保存中" : "保存"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

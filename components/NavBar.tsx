@@ -46,10 +46,6 @@ export default function NavBar() {
         ))}
       </nav>
 
-      {/* アバター */}
-      <div className="d3-top-r">
-        <span className="d3-av">管</span>
-      </div>
     </div>
   );
 }
