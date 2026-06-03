@@ -289,8 +289,11 @@ export async function POST(req: NextRequest) {
               status: "NOT_STARTED",
             },
           });
+          // staffMembers（中間テーブル）も新しい担当者で上書き
+          await prisma.processRecordStaff.deleteMany({ where: { processRecordId: existing.id } });
+          await prisma.processRecordStaff.create({ data: { processRecordId: existing.id, staffId: a.staffId } });
         } else {
-          await prisma.processRecord.create({
+          const created = await prisma.processRecord.create({
             data: {
               bridgeId: a.bridgeId,
               processTypeId: choshoProcessType.id,
@@ -301,6 +304,7 @@ export async function POST(req: NextRequest) {
               iteration: 1,
             },
           });
+          await prisma.processRecordStaff.create({ data: { processRecordId: created.id, staffId: a.staffId } });
         }
       }
     }
