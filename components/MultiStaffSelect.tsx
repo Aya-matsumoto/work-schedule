@@ -8,9 +8,10 @@ interface Props {
   staff: Staff[];
   selectedIds: number[];
   onChange: (ids: number[]) => void;
+  singleOnly?: boolean;
 }
 
-export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props) {
+export default function MultiStaffSelect({ staff, selectedIds, onChange, singleOnly = false }: Props) {
   const [open, setOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<{ top: number; left: number; minWidth: number; maxHeight: number }>({ top: 0, left: 0, minWidth: 0, maxHeight: 280 });
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -46,9 +47,14 @@ export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props
   };
 
   const toggle = (id: number) => {
-    onChange(
-      selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]
-    );
+    if (singleOnly) {
+      // 単一選択モード：選択済みなら解除、未選択なら単体選択
+      onChange(selectedIds.includes(id) ? [] : [id]);
+    } else {
+      onChange(
+        selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]
+      );
+    }
   };
 
   const label =
@@ -75,7 +81,7 @@ export default function MultiStaffSelect({ staff, selectedIds, onChange }: Props
           {staff.map((s) => (
             <label key={s.id} className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-gray-50 text-sm select-none whitespace-nowrap">
               <input
-                type="checkbox"
+                type={singleOnly ? "radio" : "checkbox"}
                 checked={selectedIds.includes(s.id)}
                 onChange={() => toggle(s.id)}
                 className="accent-blue-600"

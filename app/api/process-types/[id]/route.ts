@@ -3,10 +3,16 @@ import { prisma } from "@/lib/prisma";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { name, order, color } = await req.json();
+    const { name, order, color, allowMultipleStaff, allowAddIteration } = await req.json();
     const pt = await prisma.processType.update({
       where: { id: parseInt(params.id) },
-      data: { name, order, color },
+      data: {
+        name,
+        order,
+        color,
+        ...(allowMultipleStaff !== undefined ? { allowMultipleStaff } : {}),
+        ...(allowAddIteration !== undefined ? { allowAddIteration } : {}),
+      },
     });
     return NextResponse.json(pt);
   } catch {

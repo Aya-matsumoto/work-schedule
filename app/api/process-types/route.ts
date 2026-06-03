@@ -12,11 +12,17 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, color } = await req.json();
+    const { name, color, allowMultipleStaff, allowAddIteration } = await req.json();
     if (!name) return NextResponse.json({ error: "工程名は必須です" }, { status: 400 });
     const last = await prisma.processType.findFirst({ orderBy: { order: "desc" } });
     const pt = await prisma.processType.create({
-      data: { name, color: color ?? "#378ADD", order: (last?.order ?? 0) + 1 },
+      data: {
+        name,
+        color: color ?? "#378ADD",
+        order: (last?.order ?? 0) + 1,
+        allowMultipleStaff: allowMultipleStaff ?? false,
+        allowAddIteration: allowAddIteration ?? false,
+      },
     });
     return NextResponse.json(pt, { status: 201 });
   } catch {

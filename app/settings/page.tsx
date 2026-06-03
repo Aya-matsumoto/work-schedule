@@ -5,7 +5,7 @@ import { STAFF_TYPE_LABELS, toInputDate } from "@/lib/utils";
 
 interface Project { id: number; name: string; client: string | null; fiscalYear: string | null; deadline: string | null; note: string | null; displayOrder: number; }
 interface Staff { id: number; name: string; type: string; color: string; }
-interface ProcessType { id: number; name: string; order: number; color: string; }
+interface ProcessType { id: number; name: string; order: number; color: string; allowMultipleStaff: boolean; allowAddIteration: boolean; }
 
 type Tab = "projects" | "csv" | "staff" | "process-types";
 
@@ -20,7 +20,7 @@ export default function SettingsPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [staffForm, setStaffForm] = useState({ name: "", type: "EMPLOYEE", color: "#378ADD" });
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
-  const [ptForm, setPtForm] = useState({ name: "", color: "#378ADD" });
+  const [ptForm, setPtForm] = useState({ name: "", color: "#378ADD", allowMultipleStaff: false, allowAddIteration: false });
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
   const [csvResult, setCsvResult] = useState<any>(null);
   const [importing, setImporting] = useState(false);
@@ -102,7 +102,15 @@ export default function SettingsPage() {
   // 工程種別
   const savePt = async () => {
     const res = await fetch("/api/process-types", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ptForm) });
-    if (res.ok) { await reload(); setPtForm({ name: "", color: "#378ADD" }); showMsg("success", "追加しました"); }
+    if (res.ok) { await reload(); setPtForm({ name: "", color: "#378ADD", allowMultipleStaff: false, allowAddIteration: false }); showMsg("success", "追加しました"); }
+  };
+  const updatePtFlags = async (pt: ProcessType, field: "allowMultipleStaff" | "allowAddIteration", value: boolean) => {
+    await fetch(`/api/process-types/${pt.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: pt.name, order: pt.order, color: pt.color, [field]: value }),
+    });
+    await reload();
   };
   const deletePt = async (id: number, name: string) => {
     if (!confirm(`「${name}」を削除しますか？`)) return;
@@ -494,17 +502,51 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <div><label className="block text-xs text-gray-500 mb-1">工程名 *</label><input type="text" value={ptForm.name} onChange={(e) => setPtForm((f) => ({ ...f, name: e.target.value }))} className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full" /></div>
               <div><label className="block text-xs text-gray-500 mb-1">バッジ色</label><input type="color" value={ptForm.color} onChange={(e) => setPtForm((f) => ({ ...f, color: e.target.value }))} className="h-8 w-16 border border-gray-300 rounded" /></div>
+              <div className="flex flex-col gap-2 pt-1">
+                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  <input type="checkbox" checked={ptForm.allowMultipleStaff} onChange={(e) => setPtForm((f) => ({ ...f, allowMultipleStaff: e.target.checked }))} className="w-4 h-4 accent-blue-600" />
+                  担当者を複数設定可
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                  <input type="checkbox" checked={ptForm.allowAddIteration} onChange={(e) => setPtForm((f) => ({ ...f, allowAddIteration: e.target.checked }))} className="w-4 h-4 accent-blue-600" />
+                  ＋で繰り返し追加可
+                </label>
+              </div>
               <button onClick={savePt} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 w-full">追加</button>
             </div>
           </div>
           <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200"><tr><th className="text-left px-4 py-3 text-gray-600 font-medium w-16">順序</th><th className="text-left px-4 py-3 text-gray-600 font-medium">工程名</th><th className="w-36"></th></tr></thead>
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium w-12">順序</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">工程名</th>
+                  <th className="text-center px-4 py-3 text-gray-600 font-medium w-28">複数担当</th>
+                  <th className="text-center px-4 py-3 text-gray-600 font-medium w-28">繰り返し追加</th>
+                  <th className="w-28"></th>
+                </tr>
+              </thead>
               <tbody>
                 {[...processTypes].sort((a, b) => a.order - b.order).map((pt) => (
                   <tr key={pt.id} className="border-b border-gray-100">
                     <td className="px-4 py-3 text-gray-400">{pt.order}</td>
                     <td className="px-4 py-3"><span className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white" style={{ backgroundColor: pt.color }}>{pt.name}</span></td>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={pt.allowMultipleStaff}
+                        onChange={(e) => updatePtFlags(pt, "allowMultipleStaff", e.target.checked)}
+                        className="w-4 h-4 accent-blue-600 cursor-pointer"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={pt.allowAddIteration}
+                        onChange={(e) => updatePtFlags(pt, "allowAddIteration", e.target.checked)}
+                        className="w-4 h-4 accent-blue-600 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-4 py-3 flex gap-1">
                       <button onClick={() => movePt(pt, "up")} className="border border-gray-300 rounded px-2 py-1 text-xs hover:bg-gray-50">↑</button>
                       <button onClick={() => movePt(pt, "down")} className="border border-gray-300 rounded px-2 py-1 text-xs hover:bg-gray-50">↓</button>

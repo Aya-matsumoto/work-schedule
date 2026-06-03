@@ -8,7 +8,7 @@ import MultiStaffSelect from "@/components/MultiStaffSelect";
 import { toInputDate } from "@/lib/utils";
 
 interface Staff { id: number; name: string; }
-interface ProcessType { id: number; name: string; order: number; color: string; }
+interface ProcessType { id: number; name: string; order: number; color: string; allowMultipleStaff: boolean; allowAddIteration: boolean; }
 interface ProcessRecord {
   id: number | null;
   processTypeId: number;
@@ -213,6 +213,7 @@ export default function BridgeDetailPage() {
                   <MultiStaffSelect
                     staff={staff}
                     selectedIds={row.staffIds}
+                    singleOnly={!row.processType.allowMultipleStaff}
                     onChange={(ids) => {
                       setFormProcesses((prev) => {
                         const next = [...prev];
@@ -239,8 +240,8 @@ export default function BridgeDetailPage() {
                   <input type="text" value={row.note ?? ""} onChange={(e) => handleProcessChange(idx, "note", e.target.value || null)} placeholder="備考" className="border border-gray-300 rounded px-2 py-1 text-sm w-full" />
                 </td>
                 <td className="px-4 py-2">
-                  {row.processType.name === "修正" && (
-                    <button onClick={() => addRevisionRow(row.processTypeId, row.processType)} className="text-blue-500 hover:text-blue-700 text-xs" title="修正を追加">＋</button>
+                  {row.processType.allowAddIteration && (
+                    <button onClick={() => addRevisionRow(row.processTypeId, row.processType)} className="text-blue-500 hover:text-blue-700 text-xs" title="追加">＋</button>
                   )}
                 </td>
               </tr>

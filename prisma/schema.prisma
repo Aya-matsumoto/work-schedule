@@ -71,13 +71,15 @@ model ProjectStaff {
 
 // 工程種別マスタ
 model ProcessType {
-  id        Int             @id @default(autoincrement())
-  name      String
-  order     Int
-  color     String          @default("#378ADD")
-  processes ProcessRecord[]
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id                 Int             @id @default(autoincrement())
+  name               String
+  order              Int
+  color              String          @default("#378ADD")
+  allowMultipleStaff Boolean         @default(false)
+  allowAddIteration  Boolean         @default(false)
+  processes          ProcessRecord[]
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 }
 
 // 工程レコード
