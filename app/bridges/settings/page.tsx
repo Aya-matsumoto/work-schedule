@@ -24,6 +24,15 @@ export default function BridgeSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+
+  const toggleProject = (name: string) => {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  };
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -125,71 +134,88 @@ export default function BridgeSettingsPage() {
           {/* 業務名ごとにグループ化 */}
           {Array.from(new Map(bridges.map((b) => [b.project.name, true])).keys()).map((projectName) => {
             const groupBridges = bridges.filter((b) => b.project.name === projectName);
+            const isOpen = expandedProjects.has(projectName);
+            const hasDirty = groupBridges.some((b) => edits[b.id]?.dirty);
             return (
               <div key={projectName} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                {/* 業務名ヘッダー */}
-                <div className="px-4 py-2.5 border-b border-gray-100" style={{ background: "var(--surface)" }}>
-                  <span className="font-semibold text-sm" style={{ color: "var(--ink)" }}>{projectName}</span>
-                  <span className="ml-2 text-xs" style={{ color: "var(--muted)" }}>{groupBridges.length}橋梁</span>
+                {/* アコーディオンヘッダー */}
+                <div
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => toggleProject(projectName)}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-sm" style={{ color: "var(--ink)" }}>{projectName}</span>
+                    <span className="text-xs" style={{ color: "var(--muted)" }}>{groupBridges.length}橋梁</span>
+                    {hasDirty && (
+                      <span className="text-xs font-medium" style={{ color: "#B45309" }}>● 未保存あり</span>
+                    )}
+                  </div>
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>{isOpen ? "▲" : "▼"}</span>
                 </div>
-                <table className="w-full text-sm">
-                  <thead className="border-b border-gray-100">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-medium" style={{ color: "var(--muted)", fontSize: 12 }}>橋梁名</th>
-                      <th className="text-left px-4 py-2 font-medium" style={{ color: "var(--muted)", fontSize: 12 }}>整理番号</th>
-                      <th className="text-center px-4 py-2 font-medium w-28" style={{ color: "var(--muted)", fontSize: 12 }}>径間数</th>
-                      <th className="text-center px-4 py-2 font-medium w-32" style={{ color: "var(--muted)", fontSize: 12 }}>径間係数</th>
-                      <th className="text-center px-4 py-2 font-medium w-40" style={{ color: "var(--muted)", fontSize: 12 }}>必要時間（目安）</th>
-                      <th className="px-4 py-2 w-20"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groupBridges.map((b) => {
-                      const edit = edits[b.id];
-                      return (
-                        <tr key={b.id} className={`border-b border-gray-100 ${edit?.dirty ? "bg-yellow-50" : "hover:bg-gray-50"}`}>
-                          <td className="px-4 py-2 font-medium" style={{ color: "var(--ink)" }}>{b.name}</td>
-                          <td className="px-4 py-2" style={{ color: "var(--muted)" }}>{b.serialNo ?? "-"}</td>
-                          <td className="px-4 py-2 text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={edit?.spanCount ?? "1"}
-                              onChange={(e) => handleChange(b.id, "spanCount", e.target.value)}
-                              className="border border-gray-300 rounded px-2 py-1 text-sm w-20 text-center"
-                            />
-                            {b.spans != null && String(b.spans) !== (edit?.spanCount ?? "1") && (
-                              <div className="text-xs text-gray-400 mt-0.5">登録値: {b.spans}</div>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-center">
-                            <input
-                              type="number"
-                              min="0.1"
-                              step="0.1"
-                              value={edit?.spanCoefficient ?? "0.5"}
-                              onChange={(e) => handleChange(b.id, "spanCoefficient", e.target.value)}
-                              className="border border-gray-300 rounded px-2 py-1 text-sm w-24 text-center"
-                            />
-                          </td>
-                          <td className="px-4 py-2 text-center font-medium" style={{ color: "var(--g1)" }}>
-                            {calcHours(b.id)} 時間
-                          </td>
-                          <td className="px-4 py-2 text-right">
-                            <button
-                              onClick={() => handleSave(b)}
-                              disabled={!edit?.dirty || saving === b.id}
-                              className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 disabled:opacity-30"
-                            >
-                              {saving === b.id ? "保存中" : "保存"}
-                            </button>
-                          </td>
+
+                {/* アコーディオン本体 */}
+                {isOpen && (
+                  <div className="border-t border-gray-100">
+                    <table className="w-full text-sm">
+                      <thead className="border-b border-gray-100" style={{ background: "var(--surface)" }}>
+                        <tr>
+                          <th className="text-left px-4 py-2 font-medium" style={{ color: "var(--muted)", fontSize: 12 }}>橋梁名</th>
+                          <th className="text-left px-4 py-2 font-medium" style={{ color: "var(--muted)", fontSize: 12 }}>整理番号</th>
+                          <th className="text-center px-4 py-2 font-medium w-28" style={{ color: "var(--muted)", fontSize: 12 }}>径間数</th>
+                          <th className="text-center px-4 py-2 font-medium w-32" style={{ color: "var(--muted)", fontSize: 12 }}>径間係数</th>
+                          <th className="text-center px-4 py-2 font-medium w-40" style={{ color: "var(--muted)", fontSize: 12 }}>必要時間（目安）</th>
+                          <th className="px-4 py-2 w-20"></th>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {groupBridges.map((b) => {
+                          const edit = edits[b.id];
+                          return (
+                            <tr key={b.id} className={`border-b border-gray-100 ${edit?.dirty ? "bg-yellow-50" : "hover:bg-gray-50"}`}>
+                              <td className="px-4 py-2 font-medium" style={{ color: "var(--ink)" }}>{b.name}</td>
+                              <td className="px-4 py-2" style={{ color: "var(--muted)" }}>{b.serialNo ?? "-"}</td>
+                              <td className="px-4 py-2 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  value={edit?.spanCount ?? "1"}
+                                  onChange={(e) => handleChange(b.id, "spanCount", e.target.value)}
+                                  className="border border-gray-300 rounded px-2 py-1 text-sm w-20 text-center"
+                                />
+                                {b.spans != null && String(b.spans) !== (edit?.spanCount ?? "1") && (
+                                  <div className="text-xs text-gray-400 mt-0.5">登録値: {b.spans}</div>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                <input
+                                  type="number"
+                                  min="0.1"
+                                  step="0.1"
+                                  value={edit?.spanCoefficient ?? "0.5"}
+                                  onChange={(e) => handleChange(b.id, "spanCoefficient", e.target.value)}
+                                  className="border border-gray-300 rounded px-2 py-1 text-sm w-24 text-center"
+                                />
+                              </td>
+                              <td className="px-4 py-2 text-center font-medium" style={{ color: "var(--g1)" }}>
+                                {calcHours(b.id)} 時間
+                              </td>
+                              <td className="px-4 py-2 text-right">
+                                <button
+                                  onClick={() => handleSave(b)}
+                                  disabled={!edit?.dirty || saving === b.id}
+                                  className="bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 disabled:opacity-30"
+                                >
+                                  {saving === b.id ? "保存中" : "保存"}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             );
           })}
