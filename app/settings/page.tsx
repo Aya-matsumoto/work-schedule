@@ -123,7 +123,41 @@ export default function SettingsPage() {
     await reload();
   };
 
-  // CSV
+  // CSV ダウンロード
+  const downloadCSV = async (project: Project) => {
+    const res = await fetch(`/api/projects/${project.id}`);
+    const data = await res.json();
+    const bridges: any[] = data.bridges ?? [];
+
+    const header = "業務名,元請け,橋梁名,整理番号,径間数,点検完了日";
+    const rows = bridges.map((b) => {
+      const inspectionDate = b.inspectionDate
+        ? new Date(b.inspectionDate).toISOString().slice(0, 10)
+        : "";
+      return [
+        project.name,
+        project.client ?? "",
+        b.name,
+        b.serialNo ?? "",
+        b.spans ?? "",
+        inspectionDate,
+      ]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",");
+    });
+
+    const csv = [header, ...rows].join("\r\n");
+    const bom = "﻿"; // Excel用BOM
+    const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // CSV インポート
   const parseCSV = (text: string) => {
     const lines = text.trim().split("\n");
     return lines.slice(1).map((line) => {
@@ -292,6 +326,31 @@ export default function SettingsPage() {
       {/* CSVインポート */}
       {tab === "csv" && (
         <div className="space-y-5">
+
+          {/* CSVダウンロード */}
+          <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <h2 className="font-bold text-gray-700 mb-1">CSVダウンロード</h2>
+            <p className="text-xs text-gray-400 mb-4">業務ごとに登録済みの橋梁データをCSVでダウンロードできます。</p>
+            {projects.length === 0 ? (
+              <p className="text-sm text-gray-400">業務が登録されていません</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {projects.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => downloadCSV(p)}
+                    className="flex items-center gap-1.5 border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-lg border border-gray-200 p-5">
             <h2 className="font-bold text-gray-700 mb-2">CSVファイルをアップロード</h2>
             <p className="text-sm text-gray-500 mb-1">形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,径間数,点検完了日</code>（1行目はヘッダー）</p>
