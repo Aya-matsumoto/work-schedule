@@ -297,7 +297,7 @@ export default function StaffPage() {
                           endDate={a.endDate}
                           color={s.color}
                           processName="工数割り振り"
-                          customLabel={`📋 ${a.bridge.name}${a.isManual ? " ✏" : ""}`}
+                          customLabel={a.isManual ? `${a.bridge.name} ✏` : `${a.bridge.name} 📋`}
                           year={year}
                           month={monthNum}
                         />

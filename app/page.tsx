@@ -674,7 +674,7 @@ export default function DashboardPage() {
                                       color={choshoType?.color ?? "#EF4444"}
                                       staffName={a.staff.name}
                                       processName="調書作成"
-                                      customLabel={`📋 ${a.staff.name}${a.isManual ? " ✏" : ""}`}
+                                      customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`}
                                       year={year}
                                       month={monthNum}
                                       onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
