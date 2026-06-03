@@ -180,7 +180,7 @@ export default function AutoAssignPage() {
   const [inspectionDates, setInspectionDates] = useState<Record<number, string>>({});
 
   // 点検完了日から何日後に作業開始するか
-  const [daysAfterInspection, setDaysAfterInspection] = useState(8);
+  const [daysAfterInspection, setDaysAfterInspection] = useState(7);
 
   // 実行
   const [running, setRunning] = useState(false);
