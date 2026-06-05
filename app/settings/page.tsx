@@ -137,7 +137,7 @@ export default function SettingsPage() {
     const data = await res.json();
     const bridges: any[] = data.bridges ?? [];
 
-    const header = "業務名,元請け,橋梁名,整理番号,径間数,点検完了日";
+    const header = "業務名,元請け,橋梁名,整理番号,径間数,径間係数,点検完了日";
     const rows = bridges.map((b) => {
       const inspectionDate = b.inspectionDate
         ? new Date(b.inspectionDate).toISOString().slice(0, 10)
@@ -148,6 +148,7 @@ export default function SettingsPage() {
         b.name,
         b.serialNo ?? "",
         b.spans ?? "",
+        b.spanCoefficient ?? "",
         inspectionDate,
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -168,15 +169,28 @@ export default function SettingsPage() {
   // CSV インポート
   const parseCSV = (text: string) => {
     const lines = text.trim().split("\n");
+    // ヘッダー行から列インデックスを動的に取得
+    const headerCols = lines[0].split(",").map((c) => c.replace(/"/g, "").trim());
+    const idx = (name: string) => headerCols.indexOf(name);
     return lines.slice(1).map((line) => {
-      const cols = line.split(",").map((c) => c.trim());
+      // ダブルクォート対応の分割
+      const cols: string[] = [];
+      let cur = "", inQ = false;
+      for (const ch of line) {
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === "," && !inQ) { cols.push(cur.trim()); cur = ""; }
+        else { cur += ch; }
+      }
+      cols.push(cur.trim());
+      const get = (i: number) => (i >= 0 ? (cols[i] ?? "").replace(/"/g, "").trim() : "");
       return {
-        projectName: cols[0],
-        client: cols[1],
-        bridgeName: cols[2],
-        serialNo: cols[3],
-        spans: cols[4],
-        inspectionDate: cols[5] ?? "",
+        projectName:    get(idx("業務名")),
+        client:         get(idx("元請け")),
+        bridgeName:     get(idx("橋梁名")),
+        serialNo:       get(idx("整理番号")),
+        spans:          get(idx("径間数")),
+        spanCoefficient: get(idx("径間係数")),
+        inspectionDate: get(idx("点検完了日")),
       };
     }).filter((r) => r.projectName && r.bridgeName);
   };
@@ -361,8 +375,8 @@ export default function SettingsPage() {
 
           <div className="bg-white rounded-lg border border-gray-200 p-5">
             <h2 className="font-bold text-gray-700 mb-2">CSVファイルをアップロード</h2>
-            <p className="text-sm text-gray-500 mb-1">形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,径間数,点検完了日</code>（1行目はヘッダー）</p>
-            <p className="text-xs text-gray-400 mb-3">※ 点検完了日は YYYY-MM-DD または YYYY/MM/DD 形式。省略可。既に登録済みの橋梁は上書き更新されます。</p>
+            <p className="text-sm text-gray-500 mb-1">形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,径間数,径間係数,点検完了日</code>（1行目はヘッダー）</p>
+            <p className="text-xs text-gray-400 mb-3">※ 径間係数・点検完了日は省略可。点検完了日は YYYY-MM-DD または YYYY/MM/DD 形式。既に登録済みの橋梁は上書き更新されます。</p>
             <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="text-sm" />
           </div>
           {csvPreview.length > 0 && !csvResult && (
@@ -391,7 +405,7 @@ export default function SettingsPage() {
                 </div>
               )}
               <table className="w-full text-sm">
-                <thead className="bg-gray-50"><tr>{["業務名", "元請け", "橋梁名", "整理番号", "径間数", "点検完了日"].map((h) => <th key={h} className="text-left px-3 py-2 text-gray-600">{h}</th>)}</tr></thead>
+                <thead className="bg-gray-50"><tr>{["業務名", "元請け", "橋梁名", "整理番号", "径間数", "径間係数", "点検完了日"].map((h) => <th key={h} className="text-left px-3 py-2 text-gray-600">{h}</th>)}</tr></thead>
                 <tbody>
                   {csvPreview.slice(0, 20).map((row, i) => (
                     <tr key={i} className="border-t border-gray-100">
@@ -400,6 +414,7 @@ export default function SettingsPage() {
                       <td className="px-3 py-1.5">{row.bridgeName}</td>
                       <td className="px-3 py-1.5 text-gray-500">{row.serialNo}</td>
                       <td className="px-3 py-1.5 text-gray-500">{row.spans}</td>
+                      <td className="px-3 py-1.5 text-gray-500">{row.spanCoefficient || "-"}</td>
                       <td className="px-3 py-1.5 text-gray-500">{row.inspectionDate || "-"}</td>
                     </tr>
                   ))}

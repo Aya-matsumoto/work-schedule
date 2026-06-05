@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     };
 
     for (const row of rows) {
-      const { projectName, client, bridgeName, serialNo, spans, inspectionDate } = row;
+      const { projectName, client, bridgeName, serialNo, spans, spanCoefficient, inspectionDate } = row;
       if (!projectName || !bridgeName) {
         results.errors.push("業務名・橋梁名が空の行をスキップしました");
         results.skipped++;
@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       }
 
       const spansNum = spans ? parseInt(toHalfWidth(spans)) : null;
+      const spanCoefficientNum = spanCoefficient ? parseFloat(toHalfWidth(spanCoefficient)) : null;
       const inspectionDateVal = parseDate(inspectionDate);
 
       // 日付が入力されているのに解析失敗した場合は警告
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
           data: {
             serialNo: serialNo || existing.serialNo,
             spans: spansNum ?? existing.spans,
+            ...(spanCoefficientNum !== null && !isNaN(spanCoefficientNum) ? { spanCoefficient: spanCoefficientNum } : {}),
             inspectionDate: inspectionDateVal ?? existing.inspectionDate,
           },
         });
@@ -103,6 +105,7 @@ export async function POST(req: NextRequest) {
             name: bridgeName,
             serialNo: serialNo || null,
             spans: spansNum,
+            ...(spanCoefficientNum !== null && !isNaN(spanCoefficientNum) ? { spanCoefficient: spanCoefficientNum } : {}),
             inspectionDate: inspectionDateVal,
           },
         });
