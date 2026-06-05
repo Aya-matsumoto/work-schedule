@@ -248,7 +248,7 @@ export default function BridgeSettingsPage() {
                   <div className="border-t border-gray-100">
                     {/* 一括操作ツールバー */}
                     <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 border-b border-gray-100">
-                      <span className="text-xs text-gray-500">径間数 × 係数 × 8時間 で全橋梁の必要時間を一括算出します</span>
+                      <span className="text-xs text-gray-500">径間数 × 係数 で全橋梁の必要時間を一括算出します</span>
                       <div className="ml-auto flex gap-2">
                         <button
                           onClick={() => handleBatchAutoCalc(projectName)}
