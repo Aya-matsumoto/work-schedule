@@ -234,7 +234,7 @@
     <h1>橋梁点検進捗管理システム 利用マニュアル</h1>
     <div class="cover-sub">担当者・工程・スケジュールを一元管理するWebアプリケーションの操作ガイド</div>
   </div>
-  <div class="cover-date">2026年6月 作成</div>
+  <div class="cover-date">2026年6月 更新</div>
 </div>
 
 <!-- サイドバー + 本文 -->
@@ -256,12 +256,12 @@
     <a href="#staff-add" class="sub">4-2. 予定の追加</a>
     <div class="sidebar-sep"></div>
     <a href="#autoassign">5. 工程割り振り</a>
-    <a href="#autoassign-setup" class="sub">5-1. 担当者設定</a>
+    <a href="#autoassign-setup" class="sub">5-1. 工程別担当者設定</a>
     <a href="#autoassign-run" class="sub">5-2. 自動割り振り実行</a>
     <a href="#autoassign-gantt" class="sub">5-3. ガントで確認・調整</a>
     <div class="sidebar-sep"></div>
     <a href="#settings">6. 各種設定</a>
-    <a href="#settings-master" class="sub">6-1. マスタ管理</a>
+    <a href="#settings-master" class="sub">6-1. マスタ管理・CSV</a>
     <a href="#settings-shift" class="sub">6-2. シフト設定</a>
     <a href="#settings-span" class="sub">6-3. 径間係数設定</a>
     <a href="#settings-system" class="sub">6-4. システム設定</a>
@@ -361,6 +361,16 @@
         <strong>ヒント：</strong> ガントバーをドラッグ（左右に引っ張る）すると、日程をそのままずらせます。詳細な編集はバーをクリックしてモーダルから行います。
       </div>
 
+      <h4>工程割り振りバーの見方</h4>
+      <table>
+        <thead><tr><th>表示</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>橋梁名 📋</code></td><td>自動割り振りで登録された工程。工程種別（調書作成・チェック等）の色で表示されます。</td></tr>
+          <tr><td><code>橋梁名 ✏</code></td><td>自動割り振り後に手動で日程を修正したバーです。</td></tr>
+        </tbody>
+      </table>
+      <p style="font-size:13px; color:var(--muted); margin-top:8px;">工程フィルターで「調書作成」を選択すると調書作成の割り振りバーのみ、「チェック」を選択するとチェックの割り振りバーのみ表示されます。</p>
+
       <h3 id="dashboard-list">3-2. リスト表示</h3>
       <p>「リスト」タブに切り替えると、橋梁ごとの工程を表形式で一覧できます。整理番号・担当者・ステータスなどで絞り込み検索が可能です。</p>
 
@@ -431,35 +441,45 @@
     <section class="section" id="autoassign">
       <div class="section-badge">AUTO-ASSIGN</div>
       <h2>工程<span class="em">割り振り</span></h2>
-      <p>担当者のシフト（出勤日・勤務時間）と橋梁の径間数・係数をもとに、点検完了日から工程スケジュールを自動生成します。</p>
+      <p>担当者のシフト（出勤日・勤務時間）と橋梁ごとの必要時間をもとに、点検完了日から工程スケジュールを自動生成します。調書作成・チェック・修正の工程を連続して割り振ることができます。</p>
 
-      <h3 id="autoassign-setup">5-1. 担当者設定</h3>
+      <h3 id="autoassign-setup">5-1. 工程別担当者設定</h3>
       <ol class="steps">
         <li><span>左側の業務リストから対象業務を選択します。</span></li>
-        <li><span>「担当者設定」パネルで対象の担当者をクリックして選択します（複数選択可）。選択した担当者は色付きで表示されます。</span></li>
-        <li><span>「担当者を保存」ボタンをクリックして設定を保存します。</span></li>
+        <li><span>「工程別担当者設定」パネルで、各工程のチェックボックスをONにして担当者を選択します。</span></li>
+        <li><span>担当者は工程ごとに個別に設定できます（調書作成・チェック・修正それぞれ別の担当者を指定可能）。</span></li>
+        <li><span>「担当者設定を保存」ボタンをクリックして保存します。</span></li>
       </ol>
+
+      <div class="card">
+        <div class="card-title">工程のチェーン（連続割り振り）</div>
+        <ul style="font-size:13px; padding-left:18px; color:#3D4362;">
+          <li style="margin-bottom:6px;"><strong>調書作成</strong>：点検完了日の指定日数後から割り振られます。</li>
+          <li style="margin-bottom:6px;"><strong>チェック</strong>：調書作成の終了日の翌日から割り振られます。</li>
+          <li style="margin-bottom:6px;"><strong>修正</strong>：チェックの終了日の翌日から割り振られます。</li>
+        </ul>
+      </div>
 
       <h3 id="autoassign-run">5-2. 自動割り振り実行</h3>
       <ol class="steps">
-        <li><span>「橋梁・点検完了日」テーブルで各橋梁の点検完了日を入力します。</span></li>
-        <li><span>「点検完了日の ○ 日後から作業開始」の日数を設定します（デフォルト8日）。</span></li>
+        <li><span>「橋梁・点検完了日」テーブルで各橋梁の点検完了日を入力します。テーブルには有効化した工程ごとの必要時間が表示されます。</span></li>
+        <li><span>「点検完了日の ○ 日後から作業開始」の日数を設定します（デフォルト7日）。</span></li>
         <li><span>「🔄 自動割り振り実行」ボタンをクリックします。</span></li>
-        <li><span>確認ダイアログが表示されるので「OK」をクリックします。</span></li>
+        <li><span>確認ダイアログで工程と担当者を確認して「OK」をクリックします。</span></li>
       </ol>
 
       <div class="card">
         <div class="card-title">割り振りのルール</div>
         <ul style="font-size:13px; padding-left:18px; color:#3D4362;">
           <li style="margin-bottom:6px;">担当者のシフト設定（出勤曜日・1日の勤務時間）をもとに空き日程を検索します。</li>
-          <li style="margin-bottom:6px;">必要時間 = 径間数 × 径間係数 × 8時間 で計算されます。</li>
+          <li style="margin-bottom:6px;">必要時間は「径間係数設定」で登録した値を使用します。未登録の場合は 径間数 × 係数 × 8時間 で自動計算します。</li>
           <li style="margin-bottom:6px;">点検完了日が入力されていない橋梁はスキップされます。</li>
-          <li style="margin-bottom:6px;">担当者未設定の場合は全担当者で実行されます。</li>
+          <li style="margin-bottom:6px;">再実行すると、前回の割り振り結果はすべて削除されてから新たに登録されます。</li>
         </ul>
       </div>
 
       <div class="warn">
-        <strong>注意：</strong> 同じ業務に対して再実行すると、既存の割り当てが上書きされます。手動修正した内容は消えますのでご注意ください。
+        <strong>注意：</strong> 再実行すると当該業務の既存割り当てがすべて削除されます。手動修正した内容も消えますのでご注意ください。
       </div>
 
       <h3 id="autoassign-gantt">5-3. ガントで確認・調整</h3>
@@ -485,7 +505,7 @@
       <div class="section-badge">SETTINGS</div>
       <h2>各種<span class="em">設定</span></h2>
 
-      <h3 id="settings-master">6-1. マスタ管理</h3>
+      <h3 id="settings-master">6-1. マスタ管理・CSV</h3>
       <p>担当者・業務（プロジェクト）・橋梁・工程種別の登録・編集・削除を行います。</p>
 
       <table>
@@ -503,11 +523,43 @@
             <td><strong>工程種別</strong></td>
             <td>工程の名称・表示色・並び順を設定します。</td>
           </tr>
+          <tr>
+            <td><strong>CSVインポート</strong></td>
+            <td>橋梁データと必要時間をCSVで一括登録・更新します。</td>
+          </tr>
         </tbody>
       </table>
 
       <div class="tip">
         <strong>橋梁の追加方法：</strong> マスタ管理の「プロジェクト」タブで対象業務を展開し、「橋梁を追加」から登録します。橋梁名・整理番号・径間数・点検完了日を入力できます。
+      </div>
+
+      <h4>CSVダウンロード・インポート</h4>
+      <p>「CSVインポート」タブの上部にある「CSVダウンロード」セクションから、業務ごとにCSVをダウンロードできます。ダウンロードしたCSVを編集してインポートすることで、橋梁データと径間係数・必要時間を一括更新できます。</p>
+
+      <div class="card">
+        <div class="card-title">CSVの列構成</div>
+        <table>
+          <thead><tr><th>列名</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td>業務名</td><td>業務名（未登録の場合は自動作成）</td></tr>
+            <tr><td>元請け</td><td>発注者名（省略可）</td></tr>
+            <tr><td>橋梁名</td><td>橋梁名（必須）</td></tr>
+            <tr><td>整理番号</td><td>整理番号（省略可）</td></tr>
+            <tr><td>径間数</td><td>橋梁の径間数</td></tr>
+            <tr><td>調書作成_径間係数</td><td>調書作成工程の径間係数（省略可）</td></tr>
+            <tr><td>調書作成_必要時間</td><td>調書作成工程の必要時間（時間単位・省略で自動算出）</td></tr>
+            <tr><td>チェック_径間係数</td><td>チェック工程の径間係数（省略可）</td></tr>
+            <tr><td>チェック_必要時間</td><td>チェック工程の必要時間（省略で自動算出）</td></tr>
+            <tr><td>修正_径間係数</td><td>修正工程の径間係数（省略可）</td></tr>
+            <tr><td>修正_必要時間</td><td>修正工程の必要時間（省略で自動算出）</td></tr>
+            <tr><td>点検完了日</td><td>YYYY-MM-DD 形式（省略可）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tip">
+        <strong>ヒント：</strong> まずダウンロードして現在の登録内容を確認し、必要な列を編集してからインポートすると効率的です。既存の橋梁は上書き更新されます。
       </div>
 
       <h3 id="settings-shift">6-2. シフト設定</h3>
@@ -525,22 +577,27 @@
       <p>シフト設定パネル下部の「個別勤務時間変更」から、特定日のみ勤務時間を上書きできます。勤務時間を「0」にすると休みとして扱われます。</p>
 
       <h3 id="settings-span">6-3. 径間係数設定</h3>
-      <p>橋梁ごとの径間数と径間係数を設定します。この値が自動割り振りの必要時間計算に使われます。</p>
+      <p>橋梁ごと・工程ごとの径間係数と必要時間を設定します。自動割り振りの必要時間計算に使われます。</p>
 
       <div class="card">
         <div class="card-title">必要時間の計算式</div>
         <p style="font-size:14px; font-weight:600; color:var(--g1);">必要時間 = 径間数 × 径間係数 × 8時間</p>
-        <p style="font-size:13px; color:var(--muted); margin-top:6px;">例）径間数4 × 係数0.5 × 8 = <strong>16時間</strong>（2人日）</p>
+        <p style="font-size:13px; color:var(--muted); margin-top:6px;">例）径間数4 × 係数0.5 × 8 = <strong>16時間</strong>（2人日）<br>「必要時間」欄に直接入力した場合はその値が優先されます。空欄の場合は自動算出。</p>
       </div>
 
+      <h4>工程タブの切り替え</h4>
+      <p>画面上部のタブ（調書作成 / チェック / 修正）で工程を切り替えて、工程ごとに設定できます。</p>
+
       <ol class="steps">
+        <li><span>工程タブ（調書作成・チェック・修正）を選択します。</span></li>
         <li><span>業務名をクリックしてアコーディオンを開きます。</span></li>
-        <li><span>橋梁ごとに径間数・径間係数を入力します。</span></li>
-        <li><span>各行の「保存」ボタンをクリックして確定します。</span></li>
+        <li><span>橋梁ごとに径間数・径間係数・必要時間を入力します。</span></li>
+        <li><span>「一括自動算出」ボタンで全橋梁の必要時間を一括計算できます（径間数×係数×8時間）。</span></li>
+        <li><span>「一括保存」ボタンで変更のある全橋梁をまとめて保存します。または各行の「保存」ボタンで個別に保存します。</span></li>
       </ol>
 
       <div class="tip">
-        <strong>ヒント：</strong> 未保存の変更がある場合、業務名ヘッダーに「● 未保存あり」と表示されます。アコーディオンを閉じる前に必ず保存してください。
+        <strong>ヒント：</strong> 未保存の変更がある場合、業務名ヘッダーに「● 未保存あり」と表示されます。「一括保存」ボタンを使うと効率よく保存できます。
       </div>
 
       <h3 id="settings-system">6-4. システム設定</h3>
