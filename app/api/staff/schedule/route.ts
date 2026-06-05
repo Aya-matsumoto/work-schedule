@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
           },
           include: {
             bridge: { include: { project: true } },
+            processType: true,
           },
         },
       },

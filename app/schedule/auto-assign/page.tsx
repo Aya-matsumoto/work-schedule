@@ -168,12 +168,21 @@ export default function AutoAssignPage() {
   const [allStaff, setAllStaff] = useState<Staff[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  // 工程種別 name→id マップ、橋梁×工程の設定マップ
+  const [ptIdMap, setPtIdMap] = useState<Record<string, number>>({});
+  const [bridgeCfgMap, setBridgeCfgMap] = useState<Record<string, any>>({});
 
   // 選択中の業務
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
 
-  // 業務ごとの担当者選択（業務ID → staffId[]）
-  const [projectStaffMap, setProjectStaffMap] = useState<Record<number, number[]>>({});
+  // 工程別担当者設定（工程名 → { enabled, staffIds }）
+  const ASSIGNABLE_PT_NAMES = ["調書作成", "チェック", "修正"];
+  type PtStaffEntry = { enabled: boolean; staffIds: number[] };
+  const [ptStaffMap, setPtStaffMap] = useState<Record<string, PtStaffEntry>>({
+    "調書作成": { enabled: true, staffIds: [] },
+    "チェック": { enabled: false, staffIds: [] },
+    "修正": { enabled: false, staffIds: [] },
+  });
   const [savingStaff, setSavingStaff] = useState(false);
 
   // 点検完了日
@@ -181,6 +190,7 @@ export default function AutoAssignPage() {
 
   // 点検完了日から何日後に作業開始するか
   const [daysAfterInspection, setDaysAfterInspection] = useState(7);
+
 
   // 実行
   const [running, setRunning] = useState(false);
@@ -203,11 +213,23 @@ export default function AutoAssignPage() {
   // ─── データ読み込み ─────────────────────────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [projectsRes, staffRes, assignRes] = await Promise.all([
+    const [projectsRes, staffRes, assignRes, ptsRes, cfgRes] = await Promise.all([
       fetch(`/api/gantt/dashboard?month=${fiscalYear}-04`).then((r) => r.json()),
       fetch("/api/staff").then((r) => r.json()),
       fetch(`/api/assignments?year=${fiscalYear}`).then((r) => r.json()),
+      fetch("/api/process-types").then((r) => r.json()),
+      fetch("/api/bridge-process-configs").then((r) => r.json()),
     ]);
+
+    // 工程種別 name→id マップ
+    const newPtIdMap: Record<string, number> = {};
+    if (Array.isArray(ptsRes)) for (const pt of ptsRes) newPtIdMap[pt.name] = pt.id;
+    setPtIdMap(newPtIdMap);
+
+    // 橋梁×工程 config マップ
+    const newCfgMap: Record<string, any> = {};
+    if (Array.isArray(cfgRes)) for (const c of cfgRes) newCfgMap[`${c.bridgeId}-${c.processTypeId}`] = c;
+    setBridgeCfgMap(newCfgMap);
 
     const pList: Project[] = Array.isArray(projectsRes)
       ? projectsRes.map((p: any) => ({
@@ -247,18 +269,19 @@ export default function AutoAssignPage() {
     }
     setInspectionDates(dMap);
 
-    // 各業務の担当者を読み込む
-    const psMap: Record<number, number[]> = {};
-    for (const p of pList) {
+    // 選択中業務の調書作成担当者を読み込んで ptStaffMap を初期化
+    const firstProject = pList[0];
+    if (firstProject) {
       try {
-        const r = await fetch(`/api/projects/${p.id}/staff`);
+        const r = await fetch(`/api/projects/${firstProject.id}/staff`);
         const data = await r.json();
-        psMap[p.id] = Array.isArray(data) ? data.map((d: any) => d.staffId) : [];
-      } catch {
-        psMap[p.id] = [];
-      }
+        const staffIds = Array.isArray(data) ? data.map((d: any) => d.staffId) : [];
+        setPtStaffMap((prev) => ({
+          ...prev,
+          "調書作成": { enabled: prev["調書作成"].enabled, staffIds },
+        }));
+      } catch { /* ignore */ }
     }
-    setProjectStaffMap(psMap);
 
     // 選択業務の初期化
     if (pList.length > 0 && selectedProjectId === null) {
@@ -274,18 +297,32 @@ export default function AutoAssignPage() {
   // 選択中の業務データ
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
   const selectedBridges = selectedProject?.bridges ?? [];
-  const selectedStaffIds = selectedProjectId ? (projectStaffMap[selectedProjectId] ?? []) : [];
+  // 有効な全工程の担当者 ID 一覧（Gantt フィルター用）
+  const selectedStaffIds = [...new Set(
+    ASSIGNABLE_PT_NAMES.filter((n) => ptStaffMap[n]?.enabled)
+      .flatMap((n) => ptStaffMap[n]?.staffIds ?? [])
+  )];
 
-  // ─── 担当者トグル ───────────────────────────────────────
-  const handleToggleStaff = (staffId: number) => {
-    if (!selectedProjectId) return;
-    const current = projectStaffMap[selectedProjectId] ?? [];
-    const next = current.includes(staffId)
-      ? current.filter((id) => id !== staffId)
-      : [...current, staffId];
-    setProjectStaffMap((prev) => ({ ...prev, [selectedProjectId]: next }));
+  // 工程ごとの担当者トグル
+  const handleTogglePtStaff = (ptName: string, staffId: number) => {
+    setPtStaffMap((prev) => {
+      const current = prev[ptName]?.staffIds ?? [];
+      const next = current.includes(staffId)
+        ? current.filter((id) => id !== staffId)
+        : [...current, staffId];
+      return { ...prev, [ptName]: { ...prev[ptName], staffIds: next } };
+    });
   };
 
+  // 工程の有効/無効トグル
+  const handleTogglePt = (ptName: string) => {
+    setPtStaffMap((prev) => ({
+      ...prev,
+      [ptName]: { ...prev[ptName], enabled: !prev[ptName].enabled },
+    }));
+  };
+
+  // 調書作成の担当者をプロジェクトに保存（後方互換）
   const handleSaveStaff = async () => {
     if (!selectedProjectId) return;
     setSavingStaff(true);
@@ -293,7 +330,7 @@ export default function AutoAssignPage() {
       await fetch(`/api/projects/${selectedProjectId}/staff`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffIds: selectedStaffIds }),
+        body: JSON.stringify({ staffIds: ptStaffMap["調書作成"]?.staffIds ?? [] }),
       });
       setMsg({ type: "success", text: "✅ 担当者設定を保存しました" });
     } catch {
@@ -306,22 +343,31 @@ export default function AutoAssignPage() {
   // ─── 自動割り振り実行 ────────────────────────────────────
   const handleAutoAssign = async () => {
     if (!selectedProjectId || !selectedProject) return;
-    if (selectedStaffIds.length === 0) {
-      setMsg({ type: "error", text: "❌ 担当者を選択してから実行してください" });
+    const targetPtNames = ASSIGNABLE_PT_NAMES.filter((n) => ptStaffMap[n]?.enabled);
+    if (targetPtNames.length === 0) {
+      setMsg({ type: "error", text: "❌ 割り振り対象の工程を選択してください" });
       return;
     }
-    if (!confirm(`「${selectedProject.name}」の自動割り振りを実行しますか？\n担当者：${selectedStaffIds.map((id) => allStaff.find((s) => s.id === id)?.name ?? "").join("、")}`)) return;
+    const hasAnyStaff = targetPtNames.some((n) => (ptStaffMap[n]?.staffIds ?? []).length > 0);
+    if (!hasAnyStaff) {
+      setMsg({ type: "error", text: "❌ いずれかの工程に担当者を設定してください" });
+      return;
+    }
+
+    const staffByProcessType = targetPtNames.map((n) => ({
+      processTypeName: n,
+      staffIds: ptStaffMap[n]?.staffIds ?? [],
+    }));
+
+    const confirmMsg = targetPtNames.map((n) => {
+      const names = (ptStaffMap[n]?.staffIds ?? []).map((id) => allStaff.find((s) => s.id === id)?.name ?? "").filter(Boolean).join("、");
+      return `${n}: ${names || "（全担当者）"}`;
+    }).join("\n");
+    if (!confirm(`「${selectedProject.name}」の自動割り振りを実行しますか？\n\n${confirmMsg}`)) return;
 
     setRunning(true);
     setMsg(null);
     try {
-      // まず担当者設定を保存
-      await fetch(`/api/projects/${selectedProjectId}/staff`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staffIds: selectedStaffIds }),
-      });
-
       const inspectionList = selectedBridges.map((b) => ({
         bridgeId: b.id,
         inspectionDoneDate: inspectionDates[b.id] ?? null,
@@ -330,7 +376,14 @@ export default function AutoAssignPage() {
       const res = await fetch("/api/assignments/auto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fiscalYear, projectId: selectedProjectId, inspectionDates: inspectionList, daysAfterInspection }),
+        body: JSON.stringify({
+          fiscalYear,
+          projectId: selectedProjectId,
+          inspectionDates: inspectionList,
+          daysAfterInspection,
+          targetProcessTypeNames: targetPtNames,
+          staffByProcessType,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -516,51 +569,64 @@ export default function AutoAssignPage() {
             </div>
           ) : (
             <>
-              {/* ─── 担当者設定パネル ─── */}
+              {/* ─── 工程別担当者設定パネル ─── */}
               <div className="bg-white rounded-lg border border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                   <h2 className="font-bold text-gray-800 text-sm">
-                    📁 {selectedProject.name} ― 担当者設定
+                    📁 {selectedProject.name} ― 工程別担当者設定
                   </h2>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400">
-                      {selectedStaffIds.length === 0 ? "担当者未設定" : `${selectedStaffIds.length}名選択中`}
-                    </span>
-                    <button
-                      onClick={handleSaveStaff}
-                      disabled={savingStaff}
-                      className="text-xs border border-gray-300 px-3 py-1 rounded hover:bg-gray-50 disabled:opacity-40"
-                    >
-                      {savingStaff ? "保存中..." : "担当者を保存"}
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleSaveStaff}
+                    disabled={savingStaff}
+                    className="text-xs border border-gray-300 px-3 py-1 rounded hover:bg-gray-50 disabled:opacity-40"
+                    title="調書作成の担当者をプロジェクトに保存"
+                  >
+                    {savingStaff ? "保存中..." : "担当者設定を保存"}
+                  </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {allStaff.map((s) => {
-                    const active = selectedStaffIds.includes(s.id);
+                <div className="space-y-3">
+                  {ASSIGNABLE_PT_NAMES.map((ptName) => {
+                    const entry = ptStaffMap[ptName] ?? { enabled: false, staffIds: [] };
                     return (
-                      <button
-                        key={s.id}
-                        onClick={() => handleToggleStaff(s.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                          active
-                            ? "text-white border-transparent"
-                            : "border-gray-300 text-gray-600 hover:border-gray-400 bg-white"
-                        }`}
-                        style={active ? { backgroundColor: s.color, borderColor: s.color } : {}}
-                      >
-                        <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: s.color, opacity: active ? 0 : 1 }}
-                        />
-                        {s.name}
-                        {active && <span className="text-xs opacity-80">✓</span>}
-                      </button>
+                      <div key={ptName} className="flex items-start gap-3">
+                        {/* 工程チェック + 名前 */}
+                        <label className="flex items-center gap-2 w-28 flex-shrink-0 pt-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={entry.enabled}
+                            onChange={() => handleTogglePt(ptName)}
+                          />
+                          <span className={`text-sm font-medium ${entry.enabled ? "text-gray-800" : "text-gray-400"}`}>{ptName}</span>
+                        </label>
+                        {/* 担当者ボタン */}
+                        {entry.enabled ? (
+                          <div className="flex flex-wrap gap-2">
+                            {allStaff.map((s) => {
+                              const active = entry.staffIds.includes(s.id);
+                              return (
+                                <button
+                                  key={s.id}
+                                  onClick={() => handleTogglePtStaff(ptName, s.id)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                                    active ? "text-white border-transparent" : "border-gray-300 text-gray-600 hover:border-gray-400 bg-white"
+                                  }`}
+                                  style={active ? { backgroundColor: s.color, borderColor: s.color } : {}}
+                                >
+                                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color, opacity: active ? 0 : 1 }} />
+                                  {s.name}
+                                  {active && <span className="text-xs opacity-80">✓</span>}
+                                </button>
+                              );
+                            })}
+                            {allStaff.length === 0 && <span className="text-xs text-gray-400">担当者が登録されていません</span>}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400 pt-1">（割り振り対象外）</span>
+                        )}
+                      </div>
                     );
                   })}
-                  {allStaff.length === 0 && (
-                    <span className="text-xs text-gray-400">担当者が登録されていません</span>
-                  )}
+                  <p className="text-xs text-gray-400">※ チェック・修正は前工程の終了日の翌日から割り振られます</p>
                 </div>
               </div>
 
@@ -584,35 +650,48 @@ export default function AutoAssignPage() {
                     </div>
                     <button
                       onClick={handleAutoAssign}
-                      disabled={running || selectedStaffIds.length === 0}
+                      disabled={running || !ASSIGNABLE_PT_NAMES.some(n => ptStaffMap[n]?.enabled)}
                       className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center gap-2"
                     >
                       {running ? "⏳ 割り振り中..." : "🔄 自動割り振り実行"}
                     </button>
                   </div>
                 </div>
-                {selectedStaffIds.length === 0 && (
-                  <p className="text-xs text-orange-500 mb-2">⚠ 担当者が未選択です。上のパネルで担当者を選択してください（未選択の場合は全担当者で実行されます）</p>
-                )}
+
                 {selectedBridges.length > 0 && selectedBridges.every((b) => !inspectionDates[b.id]) && (
                   <p className="text-xs text-red-500 mb-2">⚠ 点検完了日が1件も入力されていません。点検完了日を入力した橋梁のみ割り振り対象になります</p>
                 )}
+                {(() => {
+                  // 有効工程一覧（必要時間列用）
+                  const enabledPts = ASSIGNABLE_PT_NAMES
+                    .filter((n) => ptStaffMap[n]?.enabled && ptIdMap[n])
+                    .map((n) => ({ name: n, id: ptIdMap[n] as number }));
+
+                  const calcHours = (bridgeId: number, ptId: number, b: Bridge): number => {
+                    const cfg = bridgeCfgMap[`${bridgeId}-${ptId}`];
+                    if (cfg?.requiredHours != null) return Number(cfg.requiredHours);
+                    const sc = Number(cfg?.spanCount ?? b.spans ?? b.spanCount ?? 1);
+                    const coef = Number(cfg?.spanCoefficient ?? b.spanCoefficient ?? 0.5);
+                    return sc * coef * 8;
+                  };
+
+                  return (
                 <div className="overflow-auto max-h-64">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200 sticky top-0">
                       <tr>
                         <th className="text-left px-3 py-2 text-gray-600 font-medium">橋梁名</th>
-                        <th className="text-center px-3 py-2 text-gray-600 font-medium w-16">径間数</th>
-                        <th className="text-center px-3 py-2 text-gray-600 font-medium w-16">係数</th>
-                        <th className="text-center px-3 py-2 text-gray-600 font-medium w-24">必要時間</th>
+                        {enabledPts.map((pt) => (
+                          <th key={pt.id} className="text-center px-3 py-2 text-gray-600 font-medium w-28">
+                            {pt.name} 必要時間
+                          </th>
+                        ))}
                         <th className="text-left px-3 py-2 text-gray-600 font-medium w-40">点検完了日</th>
                         <th className="text-left px-3 py-2 text-gray-600 font-medium w-32">作業開始可能日</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedBridges.map((b) => {
-                        const effectiveSpanCount = b.spans ?? b.spanCount;
-                        const hours = effectiveSpanCount * b.spanCoefficient * 8;
                         const doneDateStr = inspectionDates[b.id] ?? "";
                         const availFrom = doneDateStr
                           ? toDateStr(addDays(new Date(doneDateStr), daysAfterInspection))
@@ -620,14 +699,11 @@ export default function AutoAssignPage() {
                         return (
                           <tr key={b.id} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="px-3 py-1.5 font-medium text-gray-800">{b.name}</td>
-                            <td className="px-3 py-1.5 text-center">
-                              {effectiveSpanCount}
-                              {b.spans != null && b.spans !== b.spanCount && (
-                                <span className="text-xs text-gray-400 ml-1">(係数設定:{b.spanCount})</span>
-                              )}
-                            </td>
-                            <td className="px-3 py-1.5 text-center">{b.spanCoefficient}</td>
-                            <td className="px-3 py-1.5 text-center text-blue-600">{hours.toFixed(1)}h</td>
+                            {enabledPts.map((pt) => (
+                              <td key={pt.id} className="px-3 py-1.5 text-center text-blue-600">
+                                {calcHours(b.id, pt.id, b).toFixed(1)}h
+                              </td>
+                            ))}
                             <td className="px-3 py-1.5">
                               <input
                                 type="date"
@@ -646,7 +722,7 @@ export default function AutoAssignPage() {
                       })}
                       {selectedBridges.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="text-center py-6 text-gray-400 text-sm">
+                          <td colSpan={3 + enabledPts.length} className="text-center py-6 text-gray-400 text-sm">
                             この業務に橋梁が登録されていません
                           </td>
                         </tr>
@@ -654,6 +730,8 @@ export default function AutoAssignPage() {
                     </tbody>
                   </table>
                 </div>
+                  ); // end of IIFE return
+                })()} {/* end of IIFE */}
               </div>
 
               {/* ─── 割り当て不可リスト ─── */}

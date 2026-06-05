@@ -37,6 +37,7 @@ model Bridge {
   inspectionNote   String?
   processes        ProcessRecord[]
   assignments      BridgeAssignment[]
+  processConfigs   BridgeProcessConfig[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 }
@@ -71,15 +72,17 @@ model ProjectStaff {
 
 // 工程種別マスタ
 model ProcessType {
-  id                 Int             @id @default(autoincrement())
+  id                 Int                   @id @default(autoincrement())
   name               String
   order              Int
-  color              String          @default("#378ADD")
-  allowMultipleStaff Boolean         @default(false)
-  allowAddIteration  Boolean         @default(false)
+  color              String                @default("#378ADD")
+  allowMultipleStaff Boolean               @default(false)
+  allowAddIteration  Boolean               @default(false)
   processes          ProcessRecord[]
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  bridgeConfigs      BridgeProcessConfig[]
+  bridgeAssignments  BridgeAssignment[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 }
 
 // 工程レコード
@@ -151,17 +154,35 @@ model SystemSettings {
 
 // 橋梁担当割り当て
 model BridgeAssignment {
-  id                 Int       @id @default(autoincrement())
+  id                 Int          @id @default(autoincrement())
   bridgeId           Int
-  bridge             Bridge    @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  bridge             Bridge       @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
   staffId            Int
-  staff              Staff     @relation(fields: [staffId], references: [id])
+  staff              Staff        @relation(fields: [staffId], references: [id])
+  processTypeId      Int?
+  processType        ProcessType? @relation(fields: [processTypeId], references: [id])
   fiscalYear         Int
-  priority           Int       @default(1)
+  priority           Int          @default(1)
   inspectionDoneDate DateTime?
   startDate          DateTime?
   endDate            DateTime?
-  isManual           Boolean   @default(false)
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  isManual           Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+// 橋梁×工程種別の必要時間設定
+model BridgeProcessConfig {
+  id              Int          @id @default(autoincrement())
+  bridgeId        Int
+  bridge          Bridge       @relation(fields: [bridgeId], references: [id], onDelete: Cascade)
+  processTypeId   Int
+  processType     ProcessType  @relation(fields: [processTypeId], references: [id])
+  spanCount       Int?
+  spanCoefficient Float?
+  requiredHours   Float?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([bridgeId, processTypeId])
 }

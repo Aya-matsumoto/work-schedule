@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
             },
             // 自動割り振り結果も含める
             assignments: {
-              include: { staff: true },
+              include: { staff: true, processType: true },
             },
           },
         },

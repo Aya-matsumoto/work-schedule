@@ -33,6 +33,8 @@ interface ProcessRecord {
 interface BridgeAssignment {
   id: number;
   staffId: number;
+  processTypeId: number | null;
+  processType: { id: number; name: string; color: string } | null;
   startDate: string | null;
   endDate: string | null;
   isManual: boolean;
@@ -660,35 +662,44 @@ export default function DashboardPage() {
                                 style={{ height: 36 }}
                                 onClick={(e) => handleGridClick(e, { projectId: project.id, projectName: project.name, bridgeId: bridge.id, bridgeName: bridge.name })}
                               >
-                                {/* 自動割り振りバー：全工程 or 調書作成フィルター時のみ表示 */}
-                                {(() => {
-                                  const choshoType = processTypes.find((pt) => pt.name === "調書作成");
-                                  const show = filterTypeId === null || (choshoType && filterTypeId === choshoType.id);
-                                  if (!show) return null;
-                                  return bridge.assignments?.map((a) => (
-                                    <GanttBar
-                                      key={`assign-${a.id}`}
-                                      id={a.id}
-                                      startDate={a.startDate}
-                                      endDate={a.endDate}
-                                      color={choshoType?.color ?? "#EF4444"}
-                                      staffName={a.staff.name}
-                                      processName="調書作成"
-                                      customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`}
-                                      year={year}
-                                      month={monthNum}
-                                      onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
-                                      onClick={(aid) => handleAssignmentBarClick(aid, bridge, project.name)}
-                                    />
-                                  ));
-                                })()}
-                                {/* 工程バー：割り振りバーがある橋梁の調書作成は非表示（割り振りバーが代替） */}
+                                {/* 自動割り振りバー：全工程 or 各工程フィルターに一致するもののみ表示 */}
+                                {bridge.assignments
+                                  ?.filter((a) => {
+                                    if (filterTypeId === null) return true;
+                                    // processTypeId がある場合はそれで照合、null なら調書作成扱い
+                                    if (a.processTypeId != null) return a.processTypeId === filterTypeId;
+                                    const chosho = processTypes.find((pt) => pt.name === "調書作成");
+                                    return chosho?.id === filterTypeId;
+                                  })
+                                  .map((a) => {
+                                    const ptColor = a.processType?.color ?? processTypes.find((pt) => pt.name === "調書作成")?.color ?? "#EF4444";
+                                    return (
+                                      <GanttBar
+                                        key={`assign-${a.id}`}
+                                        id={a.id}
+                                        startDate={a.startDate}
+                                        endDate={a.endDate}
+                                        color={ptColor}
+                                        staffName={a.staff.name}
+                                        processName={a.processType?.name ?? "調書作成"}
+                                        customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`}
+                                        year={year}
+                                        month={monthNum}
+                                        onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
+                                        onClick={(aid) => handleAssignmentBarClick(aid, bridge, project.name)}
+                                      />
+                                    );
+                                  })}
+                                {/* 工程バー：割り振りバーが存在する工程は ProcessRecord を非表示（割り振りバーが代替） */}
                                 {bridge.processes
                                   .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
                                   .filter((proc) => {
-                                    const hasAssignments = (bridge.assignments?.length ?? 0) > 0;
-                                    if (hasAssignments && proc.processType.name === "調書作成") return false;
-                                    return true;
+                                    // その工程種別の割り振りバーが存在する場合はProcessRecordを非表示
+                                    const hasAssignment = bridge.assignments?.some(
+                                      (a) => (a.processTypeId === proc.processType.id) ||
+                                              (a.processTypeId == null && proc.processType.name === "調書作成")
+                                    );
+                                    return !hasAssignment;
                                   })
                                   .map((proc) => (
                                     <GanttBar

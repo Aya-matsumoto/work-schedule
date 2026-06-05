@@ -33,6 +33,7 @@ interface StaffAssignment {
   startDate: string | null;
   endDate: string | null;
   isManual: boolean;
+  processType: { id: number; name: string; color: string } | null;
   bridge: { id: number; name: string; project: { id: number; name: string } };
 }
 
@@ -295,8 +296,8 @@ export default function StaffPage() {
                           id={a.id}
                           startDate={a.startDate}
                           endDate={a.endDate}
-                          color={s.color}
-                          processName="工数割り振り"
+                          color={a.processType?.color ?? s.color}
+                          processName={a.processType?.name ?? "工数割り振り"}
                           customLabel={a.isManual ? `${a.bridge.name} ✏` : `${a.bridge.name} 📋`}
                           year={year}
                           month={monthNum}

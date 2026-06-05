@@ -46,8 +46,28 @@ export async function POST(req: NextRequest) {
       dateParseErrors: [] as string[],
     };
 
+    // 対象工程種別を取得（必要時間のインポート用）
+    const processTypeMap = new Map<string, number>();
+    const allPts = await prisma.processType.findMany();
+    for (const pt of allPts) processTypeMap.set(pt.name, pt.id);
+
     for (const row of rows) {
       const { projectName, client, bridgeName, serialNo, spans, spanCoefficient, inspectionDate } = row;
+      const requiredHoursMap: Record<string, number | null> = {};
+      const spanCoefficientMap: Record<string, number | null> = {};
+      for (const [key, val] of Object.entries(row)) {
+        if (val === "" || val == null) continue;
+        if ((key as string).endsWith("_必要時間")) {
+          const ptName = (key as string).replace("_必要時間", "");
+          const h = parseFloat(toHalfWidth(val as string));
+          if (!isNaN(h)) requiredHoursMap[ptName] = h;
+        }
+        if ((key as string).endsWith("_径間係数")) {
+          const ptName = (key as string).replace("_径間係数", "");
+          const c = parseFloat(toHalfWidth(val as string));
+          if (!isNaN(c)) spanCoefficientMap[ptName] = c;
+        }
+      }
       if (!projectName || !bridgeName) {
         results.errors.push("業務名・橋梁名が空の行をスキップしました");
         results.skipped++;
@@ -87,6 +107,7 @@ export async function POST(req: NextRequest) {
         where: { projectId: project.id, name: bridgeName },
       });
 
+      let bridgeId: number;
       if (existing) {
         await prisma.bridge.update({
           where: { id: existing.id },
@@ -97,9 +118,10 @@ export async function POST(req: NextRequest) {
             inspectionDate: inspectionDateVal ?? existing.inspectionDate,
           },
         });
+        bridgeId = existing.id;
         results.updated++;
       } else {
-        await prisma.bridge.create({
+        const created = await prisma.bridge.create({
           data: {
             projectId: project.id,
             name: bridgeName,
@@ -109,7 +131,23 @@ export async function POST(req: NextRequest) {
             inspectionDate: inspectionDateVal,
           },
         });
+        bridgeId = created.id;
         results.created++;
+      }
+
+      // 工程種別ごとの径間係数・必要時間を upsert
+      const allPtNames = new Set([...Object.keys(requiredHoursMap), ...Object.keys(spanCoefficientMap)]);
+      for (const ptName of allPtNames) {
+        const ptId = processTypeMap.get(ptName);
+        if (!ptId) continue;
+        const updateData: any = {};
+        if (ptName in requiredHoursMap) updateData.requiredHours = requiredHoursMap[ptName];
+        if (ptName in spanCoefficientMap) updateData.spanCoefficient = spanCoefficientMap[ptName];
+        await prisma.bridgeProcessConfig.upsert({
+          where: { bridgeId_processTypeId: { bridgeId, processTypeId: ptId } },
+          update: updateData,
+          create: { bridgeId, processTypeId: ptId, ...updateData },
+        });
       }
     }
 

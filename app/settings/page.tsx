@@ -133,22 +133,47 @@ export default function SettingsPage() {
 
   // CSV ダウンロード
   const downloadCSV = async (project: Project) => {
-    const res = await fetch(`/api/projects/${project.id}`);
-    const data = await res.json();
-    const bridges: any[] = data.bridges ?? [];
+    const [projectRes, cfgRes, ptsRes] = await Promise.all([
+      fetch(`/api/projects/${project.id}`).then((r) => r.json()),
+      fetch("/api/bridge-process-configs").then((r) => r.json()),
+      fetch("/api/process-types").then((r) => r.json()),
+    ]);
+    const bridges: any[] = projectRes.bridges ?? [];
+    const cfgs: any[] = Array.isArray(cfgRes) ? cfgRes : [];
+    const targetPtNames = ["調書作成", "チェック", "修正"];
+    const pts: any[] = Array.isArray(ptsRes)
+      ? ptsRes.filter((pt: any) => targetPtNames.includes(pt.name)).sort((a: any, b: any) => a.order - b.order)
+      : [];
 
-    const header = "業務名,元請け,橋梁名,整理番号,径間数,径間係数,点検完了日";
+    // bridgeId→ptId→config のマップ
+    const cfgMap = new Map<string, any>();
+    for (const c of cfgs) cfgMap.set(`${c.bridgeId}-${c.processTypeId}`, c);
+
+    const ptCols = pts.map((pt: any) => `${pt.name}_径間係数,${pt.name}_必要時間`).join(",");
+    const header = `業務名,元請け,橋梁名,整理番号,径間数,${ptCols || ""},点検完了日`.replace(/,+/g, ",").replace(/,$/, "");
+
     const rows = bridges.map((b) => {
       const inspectionDate = b.inspectionDate
         ? new Date(b.inspectionDate).toISOString().slice(0, 10)
         : "";
+      const ptCells = pts.flatMap((pt: any) => {
+        const cfg = cfgMap.get(`${b.id}-${pt.id}`);
+        // 径間係数: 工程別設定がなければ 調書作成 の場合 Bridge.spanCoefficient をフォールバック
+        const coef = cfg?.spanCoefficient != null
+          ? String(cfg.spanCoefficient)
+          : pt.name === "調書作成" ? String(b.spanCoefficient ?? "") : "";
+        return [
+          coef,
+          cfg?.requiredHours != null ? String(cfg.requiredHours) : "",
+        ];
+      });
       return [
         project.name,
         project.client ?? "",
         b.name,
         b.serialNo ?? "",
         b.spans ?? "",
-        b.spanCoefficient ?? "",
+        ...ptCells,
         inspectionDate,
       ]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
@@ -172,6 +197,9 @@ export default function SettingsPage() {
     // ヘッダー行から列インデックスを動的に取得
     const headerCols = lines[0].split(",").map((c) => c.replace(/"/g, "").trim());
     const idx = (name: string) => headerCols.indexOf(name);
+    // 工程別の動的列（*_径間係数 / *_必要時間）を抽出
+    const dynamicCols = headerCols.filter((h) => h.endsWith("_径間係数") || h.endsWith("_必要時間"));
+
     return lines.slice(1).map((line) => {
       // ダブルクォート対応の分割
       const cols: string[] = [];
@@ -183,15 +211,21 @@ export default function SettingsPage() {
       }
       cols.push(cur.trim());
       const get = (i: number) => (i >= 0 ? (cols[i] ?? "").replace(/"/g, "").trim() : "");
-      return {
-        projectName:    get(idx("業務名")),
-        client:         get(idx("元請け")),
-        bridgeName:     get(idx("橋梁名")),
-        serialNo:       get(idx("整理番号")),
-        spans:          get(idx("径間数")),
-        spanCoefficient: get(idx("径間係数")),
-        inspectionDate: get(idx("点検完了日")),
+
+      const row: Record<string, string> = {
+        projectName:     get(idx("業務名")),
+        client:          get(idx("元請け")),
+        bridgeName:      get(idx("橋梁名")),
+        serialNo:        get(idx("整理番号")),
+        spans:           get(idx("径間数")),
+        spanCoefficient: get(idx("径間係数")), // 旧フォーマット後方互換
+        inspectionDate:  get(idx("点検完了日")),
       };
+      // 工程別動的列をすべて追加
+      for (const col of dynamicCols) {
+        row[col] = get(idx(col));
+      }
+      return row;
     }).filter((r) => r.projectName && r.bridgeName);
   };
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -375,8 +409,8 @@ export default function SettingsPage() {
 
           <div className="bg-white rounded-lg border border-gray-200 p-5">
             <h2 className="font-bold text-gray-700 mb-2">CSVファイルをアップロード</h2>
-            <p className="text-sm text-gray-500 mb-1">形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,径間数,径間係数,点検完了日</code>（1行目はヘッダー）</p>
-            <p className="text-xs text-gray-400 mb-3">※ 径間係数・点検完了日は省略可。点検完了日は YYYY-MM-DD または YYYY/MM/DD 形式。既に登録済みの橋梁は上書き更新されます。</p>
+            <p className="text-sm text-gray-500 mb-1">形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,径間数,調書作成_径間係数,調書作成_必要時間,...</code>（1行目はヘッダー）</p>
+            <p className="text-xs text-gray-400 mb-3">※ 径間係数・必要時間は工程別列で設定。点検完了日は YYYY-MM-DD または YYYY/MM/DD 形式。既に登録済みの橋梁は上書き更新されます。</p>
             <input ref={fileRef} type="file" accept=".csv" onChange={handleFile} className="text-sm" />
           </div>
           {csvPreview.length > 0 && !csvResult && (
@@ -404,25 +438,37 @@ export default function SettingsPage() {
                   ⏳ データを登録しています。しばらくお待ちください...
                 </div>
               )}
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50"><tr>{["業務名", "元請け", "橋梁名", "整理番号", "径間数", "径間係数", "点検完了日"].map((h) => <th key={h} className="text-left px-3 py-2 text-gray-600">{h}</th>)}</tr></thead>
-                <tbody>
-                  {csvPreview.slice(0, 20).map((row, i) => (
-                    <tr key={i} className="border-t border-gray-100">
-                      <td className="px-3 py-1.5">{row.projectName}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{row.client}</td>
-                      <td className="px-3 py-1.5">{row.bridgeName}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{row.serialNo}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{row.spans}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{row.spanCoefficient || "-"}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{row.inspectionDate || "-"}</td>
-                    </tr>
-                  ))}
-                  {csvPreview.length > 20 && (
-                    <tr><td colSpan={6} className="px-3 py-2 text-xs text-gray-400 text-center">他 {csvPreview.length - 20} 件（プレビューは20件まで表示）</td></tr>
-                  )}
-                </tbody>
-              </table>
+              {(() => {
+                // プレビューデータから動的に列名を取得
+                const allKeys = csvPreview.length > 0 ? Object.keys(csvPreview[0]) : [];
+                // 工程別の径間係数・必要時間列を動的に取得（順序を保持）
+                const ptKeys = allKeys.filter((k) => k.endsWith("_径間係数") || k.endsWith("_必要時間"));
+                return (
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50"><tr>
+                    {["業務名", "元請け", "橋梁名", "整理番号", "径間数", ...ptKeys, "点検完了日"].map((h) => <th key={h} className="text-left px-3 py-2 text-gray-600">{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {csvPreview.slice(0, 20).map((row: any, i) => (
+                      <tr key={i} className="border-t border-gray-100">
+                        <td className="px-3 py-1.5">{row.projectName}</td>
+                        <td className="px-3 py-1.5 text-gray-500">{row.client}</td>
+                        <td className="px-3 py-1.5">{row.bridgeName}</td>
+                        <td className="px-3 py-1.5 text-gray-500">{row.serialNo}</td>
+                        <td className="px-3 py-1.5 text-gray-500">{row.spans}</td>
+                        {ptKeys.map((k) => (
+                          <td key={k} className="px-3 py-1.5 text-gray-500">{row[k] || "-"}</td>
+                        ))}
+                        <td className="px-3 py-1.5 text-gray-500">{row.inspectionDate || "-"}</td>
+                      </tr>
+                    ))}
+                    {csvPreview.length > 20 && (
+                      <tr><td colSpan={6 + ptKeys.length} className="px-3 py-2 text-xs text-gray-400 text-center">他 {csvPreview.length - 20} 件（プレビューは20件まで表示）</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                );
+              })()}
             </div>
           )}
           {csvResult && (

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// "YYYY-MM-DD" 文字列を返す（ローカル時刻基準・タイムゾーンズレなし）
 function toLocalDateStr(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -9,23 +8,19 @@ function toLocalDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-// "YYYY-MM-DD" 文字列を Date（ローカル時刻の00:00）に変換
 function parseLocalDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-// 日付に日数を加算
 function addDays(d: Date, n: number): Date {
   const r = new Date(d);
   r.setDate(r.getDate() + n);
   return r;
 }
 
-// 週パターンのキー（0=日〜6=土）
 const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
-// 担当者の「日付 → 残り勤務時間」マップを生成
 function buildWorkMap(
   shifts: Array<{
     defaultHoursPerDay: number;
@@ -39,19 +34,13 @@ function buildWorkMap(
 ): Map<string, number> {
   const map = new Map<string, number>();
   const cur = new Date(from);
-
-  // validFrom 昇順にソートしておく
-  const sortedShifts = [...shifts].sort(
-    (a, b) => a.validFrom.getTime() - b.validFrom.getTime()
-  );
+  const sortedShifts = [...shifts].sort((a, b) => a.validFrom.getTime() - b.validFrom.getTime());
 
   while (cur <= to) {
     const dateStr = toLocalDateStr(cur);
     const dow = cur.getDay();
     const dowKey = DOW_KEYS[dow];
 
-    // 当日に有効なシフト（validFrom <= cur <= validTo）を探す
-    // 見つからない場合は「最も近い（最初の）シフト」にフォールバック
     const exactShift = sortedShifts.find(
       (s) => s.validFrom <= cur && (s.validTo === null || s.validTo >= cur)
     );
@@ -67,7 +56,6 @@ function buildWorkMap(
         if (hours > 0) map.set(dateStr, hours);
       }
     } else {
-      // シフト未設定: デフォルト平日8時間
       if (dow >= 1 && dow <= 5) map.set(dateStr, 8);
     }
 
@@ -77,24 +65,94 @@ function buildWorkMap(
   return map;
 }
 
+// 割り振りロジック: 指定スタッフから availableFrom 以降の空きを探してスケジュールを確定
+function assignToStaff(
+  staffWorkMaps: Array<{ staff: any; remainingMap: Map<string, number> }>,
+  requiredHours: number,
+  availableFrom: Date,
+  startStaffIndex: number
+): { staffIdx: number; startDate: Date; endDate: Date; consumed: Array<{ date: string; hours: number }> } | null {
+  for (let attempt = 0; attempt < staffWorkMaps.length; attempt++) {
+    const idx = (startStaffIndex + attempt) % staffWorkMaps.length;
+    const sw = staffWorkMaps[idx];
+
+    const sortedDates = Array.from(sw.remainingMap.keys())
+      .filter((d) => parseLocalDate(d) >= availableFrom && sw.remainingMap.get(d)! > 0)
+      .sort();
+
+    const totalAvail = sortedDates.reduce((s, d) => s + sw.remainingMap.get(d)!, 0);
+    if (totalAvail < requiredHours) continue;
+
+    let accumulated = 0;
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+    const consumed: Array<{ date: string; hours: number }> = [];
+
+    for (const dateStr of sortedDates) {
+      const avail = sw.remainingMap.get(dateStr)!;
+      const needed = requiredHours - accumulated;
+      const use = Math.min(avail, needed);
+
+      if (!startDate) startDate = parseLocalDate(dateStr);
+      accumulated += use;
+      consumed.push({ date: dateStr, hours: use });
+
+      if (accumulated >= requiredHours) {
+        endDate = parseLocalDate(dateStr);
+        break;
+      }
+    }
+
+    if (startDate && endDate) {
+      return { staffIdx: idx, startDate, endDate, consumed };
+    }
+  }
+  return null;
+}
+
 // POST /api/assignments/auto
 export async function POST(req: NextRequest) {
   try {
-    const { fiscalYear, projectId, inspectionDates, daysAfterInspection } = await req.json();
+    const {
+      fiscalYear,
+      projectId,
+      inspectionDates,
+      daysAfterInspection,
+      targetProcessTypeNames = ["調書作成"],
+      staffByProcessType = [],
+    } = await req.json();
+
+    // 工程ごとの担当者マップ
+    const staffByPtMap = new Map<string, number[]>();
+    for (const { processTypeName, staffIds } of staffByProcessType) {
+      if (Array.isArray(staffIds) && staffIds.length > 0) {
+        staffByPtMap.set(processTypeName, staffIds);
+      }
+    }
+
     const year = parseInt(fiscalYear);
-    // 点検完了日から何日後に作業開始するか（未指定時はデフォルト8日）
-    const daysOffset: number = typeof daysAfterInspection === "number" && daysAfterInspection >= 0
-      ? daysAfterInspection
-      : 8;
+    const daysOffset: number =
+      typeof daysAfterInspection === "number" && daysAfterInspection >= 0
+        ? daysAfterInspection
+        : 7;
 
-    const fyStart = new Date(year, 3, 1);       // 4月1日（ローカル）
-    const fyEnd = new Date(year + 1, 2, 31, 23, 59, 59); // 翌年3月31日
+    const fyStart = new Date(year, 3, 1);
+    const fyEnd = new Date(year + 1, 2, 31, 23, 59, 59);
 
-    // システム設定取得
     const coefSetting = await prisma.systemSettings.findUnique({
       where: { key: "default_span_coefficient" },
     });
     const defaultCoef = coefSetting ? parseFloat(coefSetting.value) : 0.5;
+
+    // 対象工程種別を取得（順序で並べる）
+    const targetProcessTypes = await prisma.processType.findMany({
+      where: { name: { in: targetProcessTypeNames } },
+      orderBy: { order: "asc" },
+    });
+
+    if (targetProcessTypes.length === 0) {
+      return NextResponse.json({ error: "対象工程種別が見つかりません" }, { status: 400 });
+    }
 
     // 橋梁取得
     const bridgeWhere = projectId ? { projectId: parseInt(projectId) } : {};
@@ -103,10 +161,28 @@ export async function POST(req: NextRequest) {
       include: { project: true },
     });
 
-    // 担当者取得（業務に設定がなければ全担当者にフォールバック）
+    // BridgeProcessConfig を別途取得（include より確実）
+    const bridgeIds = allBridges.map((b) => b.id);
+    const allProcessConfigs = await prisma.bridgeProcessConfig.findMany({
+      where: { bridgeId: { in: bridgeIds } },
+    });
+    // bridgeId-processTypeId → config のマップ
+    const configMap = new Map<string, typeof allProcessConfigs[0]>();
+    for (const cfg of allProcessConfigs) {
+      configMap.set(`${cfg.bridgeId}-${cfg.processTypeId}`, cfg);
+    }
+
+    // 担当者取得（工程別指定がある場合は全対象IDを合算してロード）
     let staffList;
     let usedAllStaff = false;
-    if (projectId) {
+    if (staffByPtMap.size > 0) {
+      const allIds = [...new Set([...staffByPtMap.values()].flat())];
+      staffList = await prisma.staff.findMany({
+        where: { id: { in: allIds } },
+        include: { shifts: { include: { overrides: true } } },
+        orderBy: { id: "asc" },
+      });
+    } else if (projectId) {
       const projectStaff = await prisma.projectStaff.findMany({
         where: { projectId: parseInt(projectId) },
         include: { staff: { include: { shifts: { include: { overrides: true } } } } },
@@ -129,10 +205,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (staffList.length === 0) {
-      return NextResponse.json(
-        { error: "担当者が1人も登録されていません。マスタ管理から担当者を追加してください。" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "担当者が1人も登録されていません。" }, { status: 400 });
     }
 
     // 点検完了日マップ
@@ -143,37 +216,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 橋梁ごとの必要時間・開始可能日を計算（点検完了日なし → スキップ）
-    const skippedBridges: Array<{ id: number; name: string; reason: string }> = [];
-    const unassignedBridges: Array<{ id: number; name: string; reason: string }> = [];
-
-    const bridgeReqs = allBridges
-      .map((b) => {
-        const coef = b.spanCoefficient ?? defaultCoef;
-        // マスタ登録の径間数(spans)を優先、なければ係数設定のspanCountを使用
-        const spanCount = b.spans ?? b.spanCount ?? 1;
-        const requiredHours = spanCount * coef * 8;
-        const doneDateStr = doneMap.get(b.id);
-        if (!doneDateStr) {
-          skippedBridges.push({ id: b.id, name: b.name, reason: "点検完了日未入力" });
-          return null;
-        }
-        const doneDate = parseLocalDate(doneDateStr);
-        const availableFrom = addDays(doneDate, daysOffset);
-        return { bridge: b, requiredHours, availableFrom, inspectionDoneDate: doneDate };
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null && x.requiredHours > 0)
-      .sort((a, b) => a.availableFrom.getTime() - b.availableFrom.getTime());
-
-    // 担当者ごとの「日付 → 残り時間」マップ（時間単位で管理）
+    // 担当者ごとの稼働マップ
     const staffWorkMaps = staffList.map((s) => ({
       staff: s,
-      remainingMap: new Map(buildWorkMap(s.shifts, fyStart, fyEnd)), // 日付 → 残り時間
+      remainingMap: new Map(buildWorkMap(s.shifts, fyStart, fyEnd)),
     }));
+
+    // 業務・年度の割り振りをすべて削除（processTypeId は問わない）
+    const deleteWhere = projectId
+      ? { fiscalYear: year, bridge: { projectId: parseInt(projectId) } }
+      : { fiscalYear: year };
+    await prisma.bridgeAssignment.deleteMany({ where: deleteWhere });
 
     const newAssignments: Array<{
       bridgeId: number;
       staffId: number;
+      processTypeId: number;
       fiscalYear: number;
       inspectionDoneDate: Date | null;
       startDate: Date;
@@ -181,140 +239,150 @@ export async function POST(req: NextRequest) {
       isManual: boolean;
     }> = [];
 
-    let staffIndex = 0;
+    const skippedBridges: Array<{ id: number; name: string; reason: string }> = [];
+    const unassignedBridges: Array<{ id: number; name: string; reason: string }> = [];
 
-    for (const br of bridgeReqs) {
-      let assigned = false;
+    // 最初の工程（調書作成）は点検完了日が必要な順でソート
+    const firstPt = targetProcessTypes[0];
+    const firstPtBridges = allBridges
+      .filter((b) => doneMap.has(b.id))
+      .sort((a, b) => {
+        const da = parseLocalDate(doneMap.get(a.id)!).getTime();
+        const db = parseLocalDate(doneMap.get(b.id)!).getTime();
+        return da - db;
+      });
 
-      for (let attempt = 0; attempt < staffWorkMaps.length; attempt++) {
-        const idx = (staffIndex + attempt) % staffWorkMaps.length;
-        const sw = staffWorkMaps[idx];
-
-        // availableFrom 以降の日付で残り時間がある日を抽出
-        const sortedDates = [...sw.remainingMap.keys()]
-          .filter((d) => parseLocalDate(d) >= br.availableFrom && sw.remainingMap.get(d)! > 0)
-          .sort();
-
-        // 必要時間を満たせるか確認
-        const totalAvail = sortedDates.reduce((s, d) => s + sw.remainingMap.get(d)!, 0);
-        if (totalAvail < br.requiredHours) continue; // この担当者では足りない
-
-        // 必要時間分の日付を消費
-        let accumulated = 0;
-        let startDate: Date | null = null;
-        let endDate: Date | null = null;
-        const consumed: Array<{ date: string; hours: number }> = [];
-
-        for (const dateStr of sortedDates) {
-          const avail = sw.remainingMap.get(dateStr)!;
-          const needed = br.requiredHours - accumulated;
-          const use = Math.min(avail, needed);
-
-          if (!startDate) startDate = parseLocalDate(dateStr);
-          accumulated += use;
-          consumed.push({ date: dateStr, hours: use });
-
-          if (accumulated >= br.requiredHours) {
-            endDate = parseLocalDate(dateStr);
-            break;
-          }
-        }
-
-        if (startDate && endDate) {
-          // 消費分を差し引く
-          for (const { date, hours } of consumed) {
-            const rem = sw.remainingMap.get(date)! - hours;
-            if (rem <= 0) {
-              sw.remainingMap.delete(date);
-            } else {
-              sw.remainingMap.set(date, rem);
-            }
-          }
-
-          newAssignments.push({
-            bridgeId: br.bridge.id,
-            staffId: sw.staff.id,
-            fiscalYear: year,
-            inspectionDoneDate: br.inspectionDoneDate,
-            startDate,
-            endDate,
-            isManual: false,
-          });
-
-          staffIndex = (idx + 1) % staffWorkMaps.length;
-          assigned = true;
-          break;
-        }
-      }
-
-      if (!assigned) {
-        const availStr = toLocalDateStr(br.availableFrom);
-        unassignedBridges.push({
-          id: br.bridge.id,
-          name: br.bridge.name,
-          reason: `${availStr}以降に担当者の空き時間が不足（必要：${br.requiredHours.toFixed(0)}時間）`,
-        });
+    // 点検完了日なし → スキップ
+    for (const b of allBridges) {
+      if (!doneMap.has(b.id)) {
+        skippedBridges.push({ id: b.id, name: b.name, reason: "点検完了日未入力" });
       }
     }
 
-    // 「調書作成」工程種別を取得
-    const choshoProcessType = await prisma.processType.findFirst({
-      where: { name: "調書作成" },
-    });
+    let staffIndex = 0;
 
-    // 既存の割り当てをすべて削除（手動修正済み含む）
-    const deleteWhere = projectId
-      ? { fiscalYear: year, bridge: { projectId: parseInt(projectId) } }
-      : { fiscalYear: year };
-    await prisma.bridgeAssignment.deleteMany({ where: deleteWhere });
+    // ── 橋梁ごとに工程を順番に割り振る ──
+    for (const bridge of firstPtBridges) {
+      const doneDateStr = doneMap.get(bridge.id)!;
+      const doneDate = parseLocalDate(doneDateStr);
+
+      // 前工程の終了日を追跡
+      const prevEndDateMap = new Map<string, Date>(); // processTypeName -> endDate
+
+      for (const pt of targetProcessTypes) {
+        // 必要時間を決定（BridgeProcessConfig を優先）
+        const config = configMap.get(`${bridge.id}-${pt.id}`);
+        let requiredHours: number;
+        if (config?.requiredHours != null) {
+          requiredHours = Number(config.requiredHours);
+        } else {
+          const sc = config?.spanCount ?? bridge.spans ?? bridge.spanCount ?? 1;
+          const coef = config?.spanCoefficient ?? bridge.spanCoefficient ?? defaultCoef;
+          requiredHours = Number(sc) * Number(coef) * 8;
+        }
+        if (requiredHours <= 0) continue;
+
+        // 開始可能日を決定
+        let availableFrom: Date;
+        const ptOrder = targetProcessTypes.findIndex((x) => x.id === pt.id);
+        if (ptOrder === 0) {
+          // 最初の工程（調書作成）は点検完了日 + daysOffset
+          availableFrom = addDays(doneDate, daysOffset);
+        } else {
+          // 後続工程は前工程の終了日の翌日
+          const prevPt = targetProcessTypes[ptOrder - 1];
+          const prevEnd = prevEndDateMap.get(prevPt.name);
+          if (!prevEnd) {
+            // 前工程が割り振れなかった → この工程もスキップ
+            unassignedBridges.push({
+              id: bridge.id,
+              name: `${bridge.name}（${pt.name}）`,
+              reason: `前工程「${prevPt.name}」が未割り当てのためスキップ`,
+            });
+            continue;
+          }
+          availableFrom = addDays(prevEnd, 1);
+        }
+
+        // 工程専用担当者フィルタ（指定なしなら全員）
+        const ptStaffIds = staffByPtMap.get(pt.name);
+        const targetMaps = ptStaffIds
+          ? staffWorkMaps.filter((sw) => ptStaffIds.includes(sw.staff.id))
+          : staffWorkMaps;
+
+        // 空きスロットを探して割り振る
+        const result = assignToStaff(targetMaps, requiredHours, availableFrom, staffIndex % Math.max(targetMaps.length, 1));
+        if (!result) {
+          unassignedBridges.push({
+            id: bridge.id,
+            name: `${bridge.name}（${pt.name}）`,
+            reason: `${toLocalDateStr(availableFrom)}以降に空き不足（必要：${requiredHours.toFixed(0)}時間）`,
+          });
+          continue;
+        }
+
+        // 稼働マップから消費（targetMaps のインデックスを使う）
+        const assignedSw = targetMaps[result.staffIdx];
+        for (const { date, hours } of result.consumed) {
+          const rem = (assignedSw.remainingMap.get(date) ?? 0) - hours;
+          if (rem <= 0) assignedSw.remainingMap.delete(date);
+          else assignedSw.remainingMap.set(date, rem);
+        }
+
+        newAssignments.push({
+          bridgeId: bridge.id,
+          staffId: assignedSw.staff.id,
+          processTypeId: pt.id,
+          fiscalYear: year,
+          inspectionDoneDate: doneDate,
+          startDate: result.startDate,
+          endDate: result.endDate,
+          isManual: false,
+        });
+
+        prevEndDateMap.set(pt.name, result.endDate);
+        staffIndex = (result.staffIdx + 1) % Math.max(targetMaps.length, 1);
+      }
+    }
 
     if (newAssignments.length > 0) {
       await prisma.bridgeAssignment.createMany({ data: newAssignments });
     }
 
-    // 「調書作成」工程レコードを自動生成・更新
-    if (choshoProcessType) {
-      for (const a of newAssignments) {
-        // 同一橋梁・同一工程種別（iteration=1）のレコードがあれば更新、なければ作成
-        const existing = await prisma.processRecord.findFirst({
-          where: { bridgeId: a.bridgeId, processTypeId: choshoProcessType.id, iteration: 1 },
+    // ProcessRecord を工程種別ごとに作成・更新
+    for (const a of newAssignments) {
+      const existing = await prisma.processRecord.findFirst({
+        where: { bridgeId: a.bridgeId, processTypeId: a.processTypeId, iteration: 1 },
+      });
+      if (existing) {
+        await prisma.processRecord.update({
+          where: { id: existing.id },
+          data: { staffId: a.staffId, startDate: a.startDate, endDate: a.endDate, status: "NOT_STARTED" },
         });
-        if (existing) {
-          await prisma.processRecord.update({
-            where: { id: existing.id },
-            data: {
-              staffId: a.staffId,
-              startDate: a.startDate,
-              endDate: a.endDate,
-              status: "NOT_STARTED",
-            },
-          });
-          // staffMembers（中間テーブル）も新しい担当者で上書き
-          await prisma.processRecordStaff.deleteMany({ where: { processRecordId: existing.id } });
-          await prisma.processRecordStaff.create({ data: { processRecordId: existing.id, staffId: a.staffId } });
-        } else {
-          const created = await prisma.processRecord.create({
-            data: {
-              bridgeId: a.bridgeId,
-              processTypeId: choshoProcessType.id,
-              staffId: a.staffId,
-              startDate: a.startDate,
-              endDate: a.endDate,
-              status: "NOT_STARTED",
-              iteration: 1,
-            },
-          });
-          await prisma.processRecordStaff.create({ data: { processRecordId: created.id, staffId: a.staffId } });
-        }
+        await prisma.processRecordStaff.deleteMany({ where: { processRecordId: existing.id } });
+        await prisma.processRecordStaff.create({ data: { processRecordId: existing.id, staffId: a.staffId } });
+      } else {
+        const created = await prisma.processRecord.create({
+          data: {
+            bridgeId: a.bridgeId,
+            processTypeId: a.processTypeId,
+            staffId: a.staffId,
+            startDate: a.startDate,
+            endDate: a.endDate,
+            status: "NOT_STARTED",
+            iteration: 1,
+          },
+        });
+        await prisma.processRecordStaff.create({ data: { processRecordId: created.id, staffId: a.staffId } });
       }
     }
 
     const resultWhere = projectId
-      ? { fiscalYear: year, bridge: { projectId: parseInt(projectId) } }
-      : { fiscalYear: year };
+      ? { fiscalYear: year, bridge: { projectId: parseInt(projectId) }, processTypeId: { in: targetProcessTypes.map((pt) => pt.id) } }
+      : { fiscalYear: year, processTypeId: { in: targetProcessTypes.map((pt) => pt.id) } };
     const result = await prisma.bridgeAssignment.findMany({
       where: resultWhere,
-      include: { bridge: { include: { project: true } }, staff: true },
+      include: { bridge: { include: { project: true } }, staff: true, processType: true },
       orderBy: { startDate: "asc" },
     });
 
