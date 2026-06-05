@@ -16,10 +16,11 @@ model Project {
   deadline         DateTime?
   note             String?
   displayOrder     Int              @default(0)
-  bridges          Bridge[]
-  processes        ProcessRecord[]
-  staffAssignments ProjectStaff[]
-  createdAt        DateTime         @default(now())
+  bridges               Bridge[]
+  processes             ProcessRecord[]
+  staffAssignments      ProjectStaff[]
+  processStaffAssignments ProjectProcessStaff[]
+  createdAt             DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
 }
 
@@ -48,11 +49,12 @@ model Staff {
   name               String
   type               String            @default("EMPLOYEE")
   color              String            @default("#378ADD")
-  processes          ProcessRecord[]
-  shifts             StaffShift[]
-  assignments        BridgeAssignment[]
-  projectAssignments ProjectStaff[]
-  processRecords     ProcessRecordStaff[]
+  processes                 ProcessRecord[]
+  shifts                    StaffShift[]
+  assignments               BridgeAssignment[]
+  projectAssignments        ProjectStaff[]
+  processRecords            ProcessRecordStaff[]
+  projectProcessAssignments ProjectProcessStaff[]
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 }
@@ -68,6 +70,19 @@ model ProjectStaff {
   createdAt DateTime @default(now())
 
   @@unique([projectId, staffId])
+}
+
+// 業務×工程別担当者（工程割り振り用）
+model ProjectProcessStaff {
+  id              Int      @id @default(autoincrement())
+  projectId       Int
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  staffId         Int
+  staff           Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  processTypeName String
+  createdAt       DateTime @default(now())
+
+  @@unique([projectId, staffId, processTypeName])
 }
 
 // 工程種別マスタ

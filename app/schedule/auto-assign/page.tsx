@@ -269,23 +269,29 @@ export default function AutoAssignPage() {
     }
     setInspectionDates(dMap);
 
-    // 選択中業務の調書作成担当者を読み込んで ptStaffMap を初期化
-    const firstProject = pList[0];
-    if (firstProject) {
-      try {
-        const r = await fetch(`/api/projects/${firstProject.id}/staff`);
-        const data = await r.json();
-        const staffIds = Array.isArray(data) ? data.map((d: any) => d.staffId) : [];
-        setPtStaffMap((prev) => ({
-          ...prev,
-          "調書作成": { enabled: prev["調書作成"].enabled, staffIds },
-        }));
-      } catch { /* ignore */ }
-    }
-
-    // 選択業務の初期化
+    // 最初の業務を選択
+    const initProjectId = selectedProjectId ?? (pList.length > 0 ? pList[0].id : null);
     if (pList.length > 0 && selectedProjectId === null) {
       setSelectedProjectId(pList[0].id);
+    }
+
+    // 選択中業務の工程別担当者を読み込む
+    if (initProjectId) {
+      try {
+        const r = await fetch(`/api/projects/${initProjectId}/process-staff`);
+        const data: { processTypeName: string; staffIds: number[] }[] = await r.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setPtStaffMap((prev) => {
+            const next = { ...prev };
+            for (const { processTypeName, staffIds } of data) {
+              if (next[processTypeName]) {
+                next[processTypeName] = { ...next[processTypeName], staffIds };
+              }
+            }
+            return next;
+          });
+        }
+      } catch { /* ignore */ }
     }
 
     setLoading(false);
@@ -293,6 +299,27 @@ export default function AutoAssignPage() {
   }, [fiscalYear]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // 業務切り替え時に工程別担当者を読み込む
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    fetch(`/api/projects/${selectedProjectId}/process-staff`)
+      .then((r) => r.json())
+      .then((data: { processTypeName: string; staffIds: number[] }[]) => {
+        if (!Array.isArray(data)) return;
+        setPtStaffMap((prev) => {
+          const next = { ...prev };
+          // まず全工程の staffIds をリセット
+          for (const k of Object.keys(next)) next[k] = { ...next[k], staffIds: [] };
+          // 保存済みを反映
+          for (const { processTypeName, staffIds } of data) {
+            if (next[processTypeName]) next[processTypeName] = { ...next[processTypeName], staffIds };
+          }
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, [selectedProjectId]);
 
   // 選択中の業務データ
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? null;
@@ -322,11 +349,22 @@ export default function AutoAssignPage() {
     }));
   };
 
-  // 調書作成の担当者をプロジェクトに保存（後方互換）
+  // 全工程の担当者を保存
   const handleSaveStaff = async () => {
     if (!selectedProjectId) return;
     setSavingStaff(true);
     try {
+      // 工程別担当者を新テーブルに保存
+      const entries = ASSIGNABLE_PT_NAMES.map((name) => ({
+        processTypeName: name,
+        staffIds: ptStaffMap[name]?.staffIds ?? [],
+      }));
+      await fetch(`/api/projects/${selectedProjectId}/process-staff`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(entries),
+      });
+      // 調書作成は既存テーブルにも保存（後方互換）
       await fetch(`/api/projects/${selectedProjectId}/staff`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
