@@ -33,7 +33,7 @@ model Bridge {
   serialNo         String?
   spans            Int?
   spanCount        Int               @default(1)
-  spanCoefficient  Float             @default(0.5)
+  spanCoefficient  Float             @default(4)
   inspectionDate   DateTime?
   inspectionNote   String?
   processes        ProcessRecord[]

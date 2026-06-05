@@ -709,8 +709,8 @@ export default function AutoAssignPage() {
                     const cfg = bridgeCfgMap[`${bridgeId}-${ptId}`];
                     if (cfg?.requiredHours != null) return Number(cfg.requiredHours);
                     const sc = Number(cfg?.spanCount ?? b.spans ?? b.spanCount ?? 1);
-                    const coef = Number(cfg?.spanCoefficient ?? b.spanCoefficient ?? 0.5);
-                    return sc * coef * 8;
+                    const coef = Number(cfg?.spanCoefficient ?? b.spanCoefficient ?? 4);
+                    return sc * coef;
                   };
 
                   return (

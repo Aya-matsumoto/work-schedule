@@ -41,7 +41,8 @@ export default function SystemSettingsPage() {
     }
   };
 
-  const previewHours = (parseFloat(spanCoef) * 8).toFixed(1);
+  // 係数は時間/径間なのでそのまま
+  const coefNum = parseFloat(spanCoef) || 0;
 
   return (
     <div className="d3-body">
@@ -69,25 +70,23 @@ export default function SystemSettingsPage() {
               径間係数のデフォルト値
             </label>
             <p className="text-xs text-gray-400 mb-2">
-              1径間あたりの作業日数（例：0.5 = 半日4時間 / 1.0 = 1日8時間）
+              1径間あたりの作業時間（例：4 = 4時間 / 8 = 8時間=1日）
             </p>
             <div className="flex items-center gap-3">
               <input
                 type="number"
-                step="0.1"
-                min="0.1"
-                max="5"
+                step="0.5"
+                min="0.5"
+                max="80"
                 value={spanCoef}
                 onChange={(e) => setSpanCoef(e.target.value)}
                 className="d3-input w-28"
               />
-              <span className="text-sm text-gray-500">
-                日/径間 = <strong>{previewHours}</strong> 時間/径間
-              </span>
+              <span className="text-sm text-gray-500">時間/径間</span>
             </div>
             <div className="mt-2 text-xs text-gray-400 space-y-0.5">
-              <div>例）径間数4の橋梁 → 必要時間 = 4 × {spanCoef} × 8 = <strong>{(4 * parseFloat(spanCoef) * 8).toFixed(1)}</strong> 時間</div>
-              <div>　　8時間/日の担当者が担当 → <strong>{Math.ceil(4 * parseFloat(spanCoef) * 8 / 8)}</strong> 日</div>
+              <div>例）径間数4の橋梁 → 必要時間 = 4 × {spanCoef} = <strong>{(4 * coefNum).toFixed(1)}</strong> 時間</div>
+              <div>　　8時間/日の担当者が担当 → <strong>{Math.ceil(4 * coefNum / 8)}</strong> 日</div>
             </div>
           </div>
 

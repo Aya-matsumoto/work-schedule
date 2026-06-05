@@ -32,7 +32,7 @@ export default function BridgeSettingsPage() {
   const [processTypes, setProcessTypes] = useState<ProcessType[]>([]);
   const [selectedPtId, setSelectedPtId] = useState<number | null>(null);
   const [configs, setConfigs] = useState<Record<string, ConfigEdit>>({});
-  const [defaultCoef, setDefaultCoef] = useState(0.5);
+  const [defaultCoef, setDefaultCoef] = useState(4);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [batchSaving, setBatchSaving] = useState<string | null>(null);
@@ -120,7 +120,7 @@ export default function BridgeSettingsPage() {
         if (!cfg) continue;
         const sc = parseFloat(cfg.spanCount) || 0;
         const coef = parseFloat(cfg.spanCoefficient) || defaultCoef;
-        next[key] = { ...cfg, requiredHours: (sc * coef * 8).toFixed(1), dirty: true };
+        next[key] = { ...cfg, requiredHours: (sc * coef).toFixed(1), dirty: true };
       }
       return next;
     });
@@ -192,7 +192,7 @@ export default function BridgeSettingsPage() {
       <div className="d3-headrow">
         <div>
           <h1 className="d3-h1">橋梁別 径間数・<span className="em">係数設定</span></h1>
-          <div className="d3-hsub">必要時間 = 径間数 × 係数 × 8時間　または　直接入力。空欄の場合は自動算出。</div>
+          <div className="d3-hsub">必要時間 = 径間数 × 係数（時間/径間）　または　直接入力。空欄の場合は自動算出。</div>
         </div>
       </div>
 
@@ -298,7 +298,7 @@ export default function BridgeSettingsPage() {
                               </td>
                               <td className="px-4 py-2 text-center">
                                 <input
-                                  type="number" min="0.1" step="0.1"
+                                  type="number" min="0.5" step="0.5"
                                   value={cfg?.spanCoefficient ?? ""}
                                   onChange={(e) => handleChange(b.id, selectedPtId, "spanCoefficient", e.target.value)}
                                   className="border border-gray-300 rounded px-2 py-1 text-sm w-24 text-center"

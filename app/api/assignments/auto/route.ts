@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
     const coefSetting = await prisma.systemSettings.findUnique({
       where: { key: "default_span_coefficient" },
     });
-    const defaultCoef = coefSetting ? parseFloat(coefSetting.value) : 0.5;
+    const defaultCoef = coefSetting ? parseFloat(coefSetting.value) : 4;
 
     // 対象工程種別を取得（順序で並べる）
     const targetProcessTypes = await prisma.processType.findMany({
@@ -278,7 +278,7 @@ export async function POST(req: NextRequest) {
         } else {
           const sc = config?.spanCount ?? bridge.spans ?? bridge.spanCount ?? 1;
           const coef = config?.spanCoefficient ?? bridge.spanCoefficient ?? defaultCoef;
-          requiredHours = Number(sc) * Number(coef) * 8;
+          requiredHours = Number(sc) * Number(coef);
         }
         if (requiredHours <= 0) continue;
 

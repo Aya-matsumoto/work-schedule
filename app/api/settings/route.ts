@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 const DEFAULTS: Record<string, { value: string; description: string }> = {
-  default_span_coefficient: { value: "0.5", description: "径間係数のデフォルト値（1径間あたりの作業日数）" },
+  default_span_coefficient: { value: "4", description: "径間係数のデフォルト値（1径間あたりの作業時間）" },
   fiscal_year_start_month: { value: "4", description: "年度開始月" },
   hours_per_day_base: { value: "8", description: "1日の基準作業時間（時間）" },
 };
