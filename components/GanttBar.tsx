@@ -11,6 +11,7 @@ interface Props {
   staffName?: string | null;
   processName: string;
   customLabel?: string;
+  requiredHours?: number | null;
   year: number;
   month: number;
   onDragEnd?: (id: number, newStart: string, newEnd: string) => void;
@@ -25,7 +26,7 @@ function addDays(dateStr: string, days: number): string {
 
 export default function GanttBar({
   id, startDate, endDate, completedDate, color,
-  staffName, processName, customLabel, year, month, onDragEnd, onClick,
+  staffName, processName, customLabel, requiredHours, year, month, onDragEnd, onClick,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const daysInMonth = getDaysInMonth(year, month);
@@ -33,7 +34,8 @@ export default function GanttBar({
   if (!bar) return null;
 
   const label = customLabel ?? staffName ?? processName;
-  const tooltip = `${processName}\n担当: ${staffName ?? "未定"}\n${formatDate(startDate)} 〜 ${formatDate(endDate)}${completedDate ? `\n完了: ${formatDate(completedDate)}` : ""}`;
+  const hoursStr = requiredHours != null ? `\n必要時間: ${Number(requiredHours).toFixed(1)}h` : "";
+  const tooltip = `${processName}\n担当: ${staffName ?? "未定"}\n期間: ${formatDate(startDate)} 〜 ${formatDate(endDate)}${hoursStr}${completedDate ? `\n完了: ${formatDate(completedDate)}` : ""}`;
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();

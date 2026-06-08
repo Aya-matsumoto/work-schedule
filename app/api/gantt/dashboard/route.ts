@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
             assignments: {
               include: { staff: true, processType: true },
             },
+            // 工程別必要時間設定
+            processConfigs: true,
           },
         },
       },

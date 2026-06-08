@@ -41,6 +41,11 @@ interface BridgeAssignment {
   staff: { id: number; name: string; color: string };
 }
 
+interface BridgeProcessConfig {
+  processTypeId: number;
+  requiredHours: number | null;
+}
+
 interface Bridge {
   id: number;
   name: string;
@@ -49,6 +54,7 @@ interface Bridge {
   inspectionDate: string | null;
   processes: ProcessRecord[];
   assignments: BridgeAssignment[];
+  processConfigs: BridgeProcessConfig[];
 }
 
 interface Project {
@@ -673,6 +679,9 @@ export default function DashboardPage() {
                                   })
                                   .map((a) => {
                                     const ptColor = a.processType?.color ?? processTypes.find((pt) => pt.name === "調書作成")?.color ?? "#EF4444";
+                                    const cfg = a.processTypeId != null
+                                      ? bridge.processConfigs?.find((c) => c.processTypeId === a.processTypeId)
+                                      : bridge.processConfigs?.find((c) => c.processTypeId === processTypes.find((pt) => pt.name === "調書作成")?.id);
                                     return (
                                       <GanttBar
                                         key={`assign-${a.id}`}
@@ -683,6 +692,7 @@ export default function DashboardPage() {
                                         staffName={a.staff.name}
                                         processName={a.processType?.name ?? "調書作成"}
                                         customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`}
+                                        requiredHours={cfg?.requiredHours ?? null}
                                         year={year}
                                         month={monthNum}
                                         onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
@@ -701,22 +711,26 @@ export default function DashboardPage() {
                                     );
                                     return !hasAssignment;
                                   })
-                                  .map((proc) => (
-                                    <GanttBar
-                                      key={proc.id}
-                                      id={proc.id}
-                                      startDate={proc.startDate}
-                                      endDate={proc.endDate}
-                                      completedDate={proc.completedDate}
-                                      color={proc.processType.color}
-                                      staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)}
-                                      processName={proc.processType.name}
-                                      year={year}
-                                      month={monthNum}
-                                      onDragEnd={handleDragEnd}
-                                      onClick={(rid) => handleBarClick(rid, bridge.processes, project.name, bridge.name)}
-                                    />
-                                  ))}
+                                  .map((proc) => {
+                                    const procCfg = bridge.processConfigs?.find((c) => c.processTypeId === proc.processType.id);
+                                    return (
+                                      <GanttBar
+                                        key={proc.id}
+                                        id={proc.id}
+                                        startDate={proc.startDate}
+                                        endDate={proc.endDate}
+                                        completedDate={proc.completedDate}
+                                        color={proc.processType.color}
+                                        staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)}
+                                        processName={proc.processType.name}
+                                        requiredHours={procCfg?.requiredHours ?? null}
+                                        year={year}
+                                        month={monthNum}
+                                        onDragEnd={handleDragEnd}
+                                        onClick={(rid) => handleBarClick(rid, bridge.processes, project.name, bridge.name)}
+                                      />
+                                    );
+                                  })}
                               </div>
                             </GanttGrid>
                           </div>
