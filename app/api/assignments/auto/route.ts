@@ -259,17 +259,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let staffIndex = 0;
+    // 橋梁ごとの前工程終了日を追跡（工程をまたいで引き継ぐ）
+    const bridgePrevEndMap = new Map<number, Map<string, Date>>(); // bridgeId -> ptName -> endDate
 
-    // ── 橋梁ごとに工程を順番に割り振る ──
-    for (const bridge of firstPtBridges) {
-      const doneDateStr = doneMap.get(bridge.id)!;
-      const doneDate = parseLocalDate(doneDateStr);
+    // ── 工程を優先順に処理（全橋梁の調書作成→全橋梁のチェック→全橋梁の修正）──
+    // 同担当者が複数工程に選択されている場合、前工程から先に枠を確保し、
+    // 後続工程には残った枠を割り当てる。
+    for (const pt of targetProcessTypes) {
+      const ptOrder = targetProcessTypes.findIndex((x) => x.id === pt.id);
 
-      // 前工程の終了日を追跡
-      const prevEndDateMap = new Map<string, Date>(); // processTypeName -> endDate
+      // 工程専用担当者フィルタ（工程ごとに決定）
+      const ptStaffIds = staffByPtMap.get(pt.name);
+      const targetMaps = ptStaffIds
+        ? staffWorkMaps.filter((sw) => ptStaffIds.includes(sw.staff.id))
+        : staffWorkMaps;
 
-      for (const pt of targetProcessTypes) {
+      let staffIndex = 0; // 工程ごとにリセットして均等分配
+
+      for (const bridge of firstPtBridges) {
+        const doneDateStr = doneMap.get(bridge.id)!;
+        const doneDate = parseLocalDate(doneDateStr);
+
         // 必要時間を決定（BridgeProcessConfig を優先）
         const config = configMap.get(`${bridge.id}-${pt.id}`);
         let requiredHours: number;
@@ -284,16 +294,12 @@ export async function POST(req: NextRequest) {
 
         // 開始可能日を決定
         let availableFrom: Date;
-        const ptOrder = targetProcessTypes.findIndex((x) => x.id === pt.id);
         if (ptOrder === 0) {
-          // 最初の工程（調書作成）は点検完了日 + daysOffset
           availableFrom = addDays(doneDate, daysOffset);
         } else {
-          // 後続工程は前工程の終了日の翌日
           const prevPt = targetProcessTypes[ptOrder - 1];
-          const prevEnd = prevEndDateMap.get(prevPt.name);
+          const prevEnd = bridgePrevEndMap.get(bridge.id)?.get(prevPt.name);
           if (!prevEnd) {
-            // 前工程が割り振れなかった → この工程もスキップ
             unassignedBridges.push({
               id: bridge.id,
               name: `${bridge.name}（${pt.name}）`,
@@ -303,12 +309,6 @@ export async function POST(req: NextRequest) {
           }
           availableFrom = addDays(prevEnd, 1);
         }
-
-        // 工程専用担当者フィルタ（指定なしなら全員）
-        const ptStaffIds = staffByPtMap.get(pt.name);
-        const targetMaps = ptStaffIds
-          ? staffWorkMaps.filter((sw) => ptStaffIds.includes(sw.staff.id))
-          : staffWorkMaps;
 
         // 空きスロットを探して割り振る
         const result = assignToStaff(targetMaps, requiredHours, availableFrom, staffIndex % Math.max(targetMaps.length, 1));
@@ -321,7 +321,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // 稼働マップから消費（targetMaps のインデックスを使う）
+        // 稼働マップから消費
         const assignedSw = targetMaps[result.staffIdx];
         for (const { date, hours } of result.consumed) {
           const rem = (assignedSw.remainingMap.get(date) ?? 0) - hours;
@@ -340,7 +340,10 @@ export async function POST(req: NextRequest) {
           isManual: false,
         });
 
-        prevEndDateMap.set(pt.name, result.endDate);
+        // 前工程終了日を橋梁ごとに記録
+        if (!bridgePrevEndMap.has(bridge.id)) bridgePrevEndMap.set(bridge.id, new Map());
+        bridgePrevEndMap.get(bridge.id)!.set(pt.name, result.endDate);
+
         staffIndex = (result.staffIdx + 1) % Math.max(targetMaps.length, 1);
       }
     }
