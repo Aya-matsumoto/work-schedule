@@ -349,32 +349,42 @@ export async function POST(req: NextRequest) {
       await prisma.bridgeAssignment.createMany({ data: newAssignments });
     }
 
-    // ProcessRecord を工程種別ごとに作成・更新
-    for (const a of newAssignments) {
-      const existing = await prisma.processRecord.findFirst({
-        where: { bridgeId: a.bridgeId, processTypeId: a.processTypeId, iteration: 1 },
+    // 対象工程の ProcessRecord を先にリセット（前回の割り振り結果をすべて削除）
+    const allBridgeIds = allBridges.map((b) => b.id);
+    if (allBridgeIds.length > 0) {
+      // 削除対象の ProcessRecordStaff を先に消す
+      const oldRecords = await prisma.processRecord.findMany({
+        where: {
+          bridgeId: { in: allBridgeIds },
+          processTypeId: { in: targetProcessTypes.map((pt) => pt.id) },
+          iteration: 1,
+        },
+        select: { id: true },
       });
-      if (existing) {
-        await prisma.processRecord.update({
-          where: { id: existing.id },
-          data: { staffId: a.staffId, startDate: a.startDate, endDate: a.endDate, status: "NOT_STARTED" },
+      if (oldRecords.length > 0) {
+        await prisma.processRecordStaff.deleteMany({
+          where: { processRecordId: { in: oldRecords.map((r) => r.id) } },
         });
-        await prisma.processRecordStaff.deleteMany({ where: { processRecordId: existing.id } });
-        await prisma.processRecordStaff.create({ data: { processRecordId: existing.id, staffId: a.staffId } });
-      } else {
-        const created = await prisma.processRecord.create({
-          data: {
-            bridgeId: a.bridgeId,
-            processTypeId: a.processTypeId,
-            staffId: a.staffId,
-            startDate: a.startDate,
-            endDate: a.endDate,
-            status: "NOT_STARTED",
-            iteration: 1,
-          },
+        await prisma.processRecord.deleteMany({
+          where: { id: { in: oldRecords.map((r) => r.id) } },
         });
-        await prisma.processRecordStaff.create({ data: { processRecordId: created.id, staffId: a.staffId } });
       }
+    }
+
+    // ProcessRecord を工程種別ごとに新規作成（リセット済みなので常に create）
+    for (const a of newAssignments) {
+      const created = await prisma.processRecord.create({
+        data: {
+          bridgeId: a.bridgeId,
+          processTypeId: a.processTypeId,
+          staffId: a.staffId,
+          startDate: a.startDate,
+          endDate: a.endDate,
+          status: "NOT_STARTED",
+          iteration: 1,
+        },
+      });
+      await prisma.processRecordStaff.create({ data: { processRecordId: created.id, staffId: a.staffId } });
     }
 
     const resultWhere = projectId
