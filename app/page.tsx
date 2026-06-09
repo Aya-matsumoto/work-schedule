@@ -118,6 +118,7 @@ export default function DashboardPage() {
   const [filterProcess, setFilterProcess] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("default");
+  const [holidays, setHolidays] = useState<string[]>([]);
 
   const { year, month: monthNum } = parseYearMonth(month);
   const daysInMonth = getDaysInMonth(year, monthNum);
@@ -128,10 +129,12 @@ export default function DashboardPage() {
       fetch(`/api/gantt/dashboard?month=${month}`).then((r) => r.json()),
       fetch("/api/staff").then((r) => r.json()),
       fetch("/api/process-types").then((r) => r.json()),
-    ]).then(([projectsData, staffData, typesData]) => {
+      fetch("/api/holidays").then((r) => r.json()),
+    ]).then(([projectsData, staffData, typesData, holidaysData]) => {
       setProjects(Array.isArray(projectsData) ? projectsData : []);
       setStaff(Array.isArray(staffData) ? staffData : []);
       setProcessTypes(Array.isArray(typesData) ? [...typesData].sort((a: ProcessType, b: ProcessType) => a.order - b.order) : []);
+      setHolidays(Array.isArray(holidaysData) ? holidaysData.map((h: any) => h.date) : []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [month]);
@@ -605,7 +608,7 @@ export default function DashboardPage() {
                           <span className="text-xs text-gray-400 italic">業務全体</span>
                         </div>
                         <div className="flex-1 border-l border-gray-100 min-w-0">
-                          <GanttGrid year={year} month={monthNum}>
+                          <GanttGrid year={year} month={monthNum} holidays={holidays}>
                             <div
                               className="relative cursor-cell"
                               style={{ height: 32 }}
@@ -662,7 +665,7 @@ export default function DashboardPage() {
                             </button>
                           </div>
                           <div className="flex-1 border-l border-gray-100 min-w-0">
-                            <GanttGrid year={year} month={monthNum}>
+                            <GanttGrid year={year} month={monthNum} holidays={holidays}>
                               <div
                                 className="relative cursor-cell"
                                 style={{ height: 36 }}

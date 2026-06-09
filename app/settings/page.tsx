@@ -6,8 +6,9 @@ import { STAFF_TYPE_LABELS, toInputDate } from "@/lib/utils";
 interface Project { id: number; name: string; client: string | null; fiscalYear: string | null; deadline: string | null; note: string | null; displayOrder: number; }
 interface Staff { id: number; name: string; type: string; color: string; }
 interface ProcessType { id: number; name: string; order: number; color: string; allowMultipleStaff: boolean; allowAddIteration: boolean; }
+interface Holiday { id: number; date: string; name: string; }
 
-type Tab = "projects" | "csv" | "staff" | "process-types";
+type Tab = "projects" | "csv" | "staff" | "process-types" | "holidays";
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("projects");
@@ -25,6 +26,8 @@ export default function SettingsPage() {
   const [csvResult, setCsvResult] = useState<any>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [holidayForm, setHolidayForm] = useState({ date: "", name: "" });
 
   const showMsg = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
@@ -32,12 +35,14 @@ export default function SettingsPage() {
   };
 
   const reload = async () => {
-    const [p, s, pt] = await Promise.all([
+    const [p, s, pt, hol] = await Promise.all([
       fetch("/api/projects").then((r) => r.json()),
       fetch("/api/staff").then((r) => r.json()),
       fetch("/api/process-types").then((r) => r.json()),
+      fetch("/api/holidays").then((r) => r.json()),
     ]);
     setProjects(p); setStaff(s); setProcessTypes(pt);
+    setHolidays(Array.isArray(hol) ? hol : []);
   };
 
   useEffect(() => { reload(); }, []);
@@ -279,11 +284,35 @@ export default function SettingsPage() {
     }
   };
 
+  // 休日
+  const addHoliday = async () => {
+    if (!holidayForm.date) { showMsg("error", "日付を入力してください"); return; }
+    const res = await fetch("/api/holidays", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(holidayForm),
+    });
+    if (res.ok) {
+      await reload();
+      setHolidayForm({ date: "", name: "" });
+      showMsg("success", "追加しました");
+    } else {
+      showMsg("error", "追加に失敗しました");
+    }
+  };
+  const deleteHoliday = async (id: number) => {
+    if (!confirm("この休日を削除しますか？")) return;
+    const res = await fetch(`/api/holidays/${id}`, { method: "DELETE" });
+    if (res.ok) { await reload(); showMsg("success", "削除しました"); }
+    else showMsg("error", "削除に失敗しました");
+  };
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "projects", label: "業務管理" },
     { key: "csv", label: "CSVインポート" },
     { key: "staff", label: "担当者管理" },
     { key: "process-types", label: "工程種別管理" },
+    { key: "holidays", label: "休日設定" },
   ];
 
   return (
@@ -615,6 +644,80 @@ export default function SettingsPage() {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 休日設定 */}
+      {tab === "holidays" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* 追加フォーム */}
+          <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <h2 className="font-bold text-gray-700 mb-4">公休日を追加</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">日付 *</label>
+                <input
+                  type="date"
+                  value={holidayForm.date}
+                  onChange={(e) => setHolidayForm((f) => ({ ...f, date: e.target.value }))}
+                  className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">名称（任意）</label>
+                <input
+                  type="text"
+                  value={holidayForm.name}
+                  onChange={(e) => setHolidayForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="例: 創立記念日、夏季休暇"
+                  className="border border-gray-300 rounded px-3 py-1.5 text-sm w-full"
+                />
+              </div>
+              <button
+                onClick={addHoliday}
+                className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 w-full"
+              >
+                追加
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-4 leading-relaxed">
+              ここで登録した日は工程割り振りの対象外となり、ダッシュボードでは薄赤色でグレーアウト表示されます。
+            </p>
+          </div>
+
+          {/* 休日一覧 */}
+          <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">日付</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">曜日</th>
+                  <th className="text-left px-4 py-3 text-gray-600 font-medium">名称</th>
+                  <th className="w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {holidays.map((h) => {
+                  const d = new Date(h.date + "T00:00:00");
+                  const dow = ["日", "月", "火", "水", "木", "金", "土"][d.getDay()];
+                  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                  return (
+                    <tr key={h.id} className="border-b border-gray-100">
+                      <td className="px-4 py-3 font-medium">{h.date.replace(/-/g, "/")}</td>
+                      <td className={`px-4 py-3 ${isWeekend ? "text-red-400" : "text-gray-600"}`}>{dow}曜</td>
+                      <td className="px-4 py-3 text-gray-500">{h.name || "-"}</td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => deleteHoliday(h.id)} className="text-red-400 hover:text-red-600 text-xs">削除</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {holidays.length === 0 && (
+                  <tr><td colSpan={4} className="text-center py-6 text-gray-400">休日が登録されていません</td></tr>
+                )}
               </tbody>
             </table>
           </div>

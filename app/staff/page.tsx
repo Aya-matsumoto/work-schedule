@@ -64,6 +64,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(false);
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
+  const [holidays, setHolidays] = useState<string[]>([]);
 
   const { year, month: monthNum } = parseYearMonth(month);
   const daysInMonth = new Date(year, monthNum, 0).getDate();
@@ -77,12 +78,13 @@ export default function StaffPage() {
 
   useEffect(() => { loadSchedule(); }, [loadSchedule]);
 
-  // 業務・工程種別を初回ロード
+  // 業務・工程種別・休日を初回ロード
   useEffect(() => {
     Promise.all([
       fetch(`/api/gantt/dashboard?month=${month}`).then((r) => r.json()),
       fetch("/api/process-types").then((r) => r.json()),
-    ]).then(([projectsData, typesData]) => {
+      fetch("/api/holidays").then((r) => r.json()),
+    ]).then(([projectsData, typesData, holidaysData]) => {
       if (Array.isArray(projectsData)) {
         setProjects(projectsData.map((p: any) => ({
           id: p.id,
@@ -92,6 +94,9 @@ export default function StaffPage() {
       }
       if (Array.isArray(typesData)) {
         setProcessTypes([...typesData].sort((a, b) => a.order - b.order));
+      }
+      if (Array.isArray(holidaysData)) {
+        setHolidays(holidaysData.map((h: any) => h.date));
       }
     });
   }, [month]);
@@ -283,7 +288,7 @@ export default function StaffPage() {
                 </div>
                 {/* ガントチャート */}
                 <div className="flex-1 border-l border-gray-100">
-                  <GanttGrid year={year} month={monthNum}>
+                  <GanttGrid year={year} month={monthNum} holidays={holidays}>
                     <div
                       className="relative cursor-cell"
                       style={{ height: 40 }}

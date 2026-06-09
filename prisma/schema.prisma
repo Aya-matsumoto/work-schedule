@@ -186,6 +186,14 @@ model BridgeAssignment {
   updatedAt          DateTime     @updatedAt
 }
 
+// 会社公休日
+model Holiday {
+  id        Int      @id @default(autoincrement())
+  date      DateTime
+  name      String   @default("")
+  createdAt DateTime @default(now())
+}
+
 // 橋梁×工程種別の必要時間設定
 model BridgeProcessConfig {
   id              Int          @id @default(autoincrement())

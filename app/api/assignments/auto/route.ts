@@ -30,7 +30,8 @@ function buildWorkMap(
     overrides: Array<{ date: Date; hoursPerDay: number }>;
   }>,
   from: Date,
-  to: Date
+  to: Date,
+  holidaySet: Set<string> = new Set()
 ): Map<string, number> {
   const map = new Map<string, number>();
   const cur = new Date(from);
@@ -40,6 +41,12 @@ function buildWorkMap(
     const dateStr = toLocalDateStr(cur);
     const dow = cur.getDay();
     const dowKey = DOW_KEYS[dow];
+
+    // 会社公休日はスキップ
+    if (holidaySet.has(dateStr)) {
+      cur.setDate(cur.getDate() + 1);
+      continue;
+    }
 
     const exactShift = sortedShifts.find(
       (s) => s.validFrom <= cur && (s.validTo === null || s.validTo >= cur)
@@ -216,10 +223,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 担当者ごとの稼働マップ
+    // 会社公休日をSetで取得（稼働マップから除外するため）
+    const dbHolidays = await prisma.holiday.findMany();
+    const holidaySet = new Set<string>(dbHolidays.map((h) => toLocalDateStr(h.date)));
+
+    // 担当者ごとの稼働マップ（公休日を除外）
     const staffWorkMaps = staffList.map((s) => ({
       staff: s,
-      remainingMap: new Map(buildWorkMap(s.shifts, fyStart, fyEnd)),
+      remainingMap: new Map(buildWorkMap(s.shifts, fyStart, fyEnd, holidaySet)),
     }));
 
     // 業務・年度の割り振りをすべて削除（processTypeId は問わない）
