@@ -196,6 +196,60 @@ export default function SettingsPage() {
     URL.revokeObjectURL(url);
   };
 
+  // 工程進捗 CSV ダウンロード
+  const downloadProcessCSV = async (project: Project) => {
+    const [projectRes, ptsRes] = await Promise.all([
+      fetch(`/api/projects/${project.id}`).then((r) => r.json()),
+      fetch("/api/process-types").then((r) => r.json()),
+    ]);
+    const bridges: any[] = projectRes.bridges ?? [];
+    const targetPtNames = ["調書作成", "チェック", "修正"];
+    const pts: any[] = Array.isArray(ptsRes)
+      ? ptsRes.filter((pt: any) => targetPtNames.includes(pt.name)).sort((a: any, b: any) => a.order - b.order)
+      : [];
+
+    const statusLabel = (s: string) =>
+      s === "COMPLETED" || s === "DONE" ? "完了" : s === "IN_PROGRESS" ? "作業中" : "未着手";
+
+    const formatD = (d: string | null | undefined) =>
+      d ? new Date(d).toISOString().slice(0, 10) : "";
+
+    const ptCols = pts.flatMap((pt: any) => [
+      `${pt.name}_担当者`, `${pt.name}_開始日`, `${pt.name}_終了日`, `${pt.name}_ステータス`,
+    ]);
+    const header = ["業務名", "元請け", "橋梁名", "整理番号", ...ptCols].join(",");
+
+    const rows = bridges.map((b) => {
+      const cells = pts.flatMap((pt: any) => {
+        // iteration=1 の最新レコードを使用
+        const procs: any[] = (b.processes ?? []).filter((p: any) => p.processType?.id === pt.id);
+        const proc = procs.find((p: any) => p.iteration === 1) ?? procs[0] ?? null;
+        if (!proc) return ["", "", "", ""];
+        const staffNames = proc.staffMembers && proc.staffMembers.length > 0
+          ? proc.staffMembers.map((sm: any) => sm.staff.name).join("・")
+          : proc.staff?.name ?? "";
+        return [
+          staffNames,
+          formatD(proc.startDate),
+          formatD(proc.endDate),
+          statusLabel(proc.status ?? "NOT_STARTED"),
+        ];
+      });
+      return [project.name, project.client ?? "", b.name, b.serialNo ?? "", ...cells]
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",");
+    });
+
+    const csv = [header, ...rows].join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${project.name}_工程進捗.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // CSV インポート
   const parseCSV = (text: string) => {
     const lines = text.trim().split("\n");
@@ -412,10 +466,10 @@ export default function SettingsPage() {
       {tab === "csv" && (
         <div className="space-y-5">
 
-          {/* CSVダウンロード */}
+          {/* 橋梁マスタ CSVダウンロード */}
           <div className="bg-white rounded-lg border border-gray-200 p-5">
-            <h2 className="font-bold text-gray-700 mb-1">CSVダウンロード</h2>
-            <p className="text-xs text-gray-400 mb-4">業務ごとに登録済みの橋梁データをCSVでダウンロードできます。</p>
+            <h2 className="font-bold text-gray-700 mb-1">橋梁マスタ CSVダウンロード</h2>
+            <p className="text-xs text-gray-400 mb-4">業務ごとに登録済みの橋梁データ（径間数・係数・必要時間・点検完了日）をCSVでダウンロードできます。</p>
             {projects.length === 0 ? (
               <p className="text-sm text-gray-400">業務が登録されていません</p>
             ) : (
@@ -425,6 +479,33 @@ export default function SettingsPage() {
                     key={p.id}
                     onClick={() => downloadCSV(p)}
                     className="flex items-center gap-1.5 border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 工程進捗 CSVダウンロード */}
+          <div className="bg-white rounded-lg border border-gray-200 p-5">
+            <h2 className="font-bold text-gray-700 mb-1">工程進捗 CSVダウンロード</h2>
+            <p className="text-xs text-gray-400 mb-1">業務ごとに現在の工程状況（担当者・開始日・終了日・ステータス）をCSVでダウンロードできます。</p>
+            <p className="text-xs text-gray-400 mb-4">
+              形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名, 元請け, 橋梁名, 整理番号, 調書作成_担当者, 調書作成_開始日, 調書作成_終了日, 調書作成_ステータス, …</code>
+            </p>
+            {projects.length === 0 ? (
+              <p className="text-sm text-gray-400">業務が登録されていません</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {projects.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => downloadProcessCSV(p)}
+                    className="flex items-center gap-1.5 border border-indigo-300 rounded px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-50 hover:border-indigo-400 transition-colors"
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>

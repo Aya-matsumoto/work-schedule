@@ -10,7 +10,11 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
         bridges: {
           include: {
             processes: {
-              include: { processType: true, staff: true },
+              include: {
+                processType: true,
+                staff: true,
+                staffMembers: { include: { staff: true } },
+              },
               orderBy: [{ processType: { order: "asc" } }, { iteration: "asc" }],
             },
           },
