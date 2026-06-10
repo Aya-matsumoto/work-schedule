@@ -26,6 +26,11 @@ export default function SettingsPage() {
   const [csvResult, setCsvResult] = useState<any>(null);
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // 工程CSV import 用
+  const [processCsvPreview, setProcessCsvPreview] = useState<any[]>([]);
+  const [processCsvResult, setProcessCsvResult] = useState<any>(null);
+  const [processImporting, setProcessImporting] = useState(false);
+  const processCsvRef = useRef<HTMLInputElement>(null);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [holidayForm, setHolidayForm] = useState({ date: "", name: "" });
 
@@ -338,6 +343,81 @@ export default function SettingsPage() {
     }
   };
 
+  // 工程CSV パース
+  const parseProcessCSV = (text: string) => {
+    const lines = text.trim().split("\n");
+    const headerCols = lines[0].split(",").map((c) => c.replace(/"/g, "").trim());
+    const idx = (name: string) => headerCols.indexOf(name);
+    // 工程別動的列（*_担当者 / *_開始日 / *_終了日 / *_ステータス）
+    const dynamicCols = headerCols.filter((h) =>
+      h.endsWith("_担当者") || h.endsWith("_開始日") || h.endsWith("_終了日") || h.endsWith("_ステータス")
+    );
+    return lines.slice(1).map((line) => {
+      const cols: string[] = [];
+      let cur = "", inQ = false;
+      for (const ch of line) {
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === "," && !inQ) { cols.push(cur.trim()); cur = ""; }
+        else { cur += ch; }
+      }
+      cols.push(cur.trim());
+      const get = (i: number) => (i >= 0 ? (cols[i] ?? "").replace(/"/g, "").trim() : "");
+      const row: Record<string, string> = {
+        projectName: get(idx("業務名")),
+        bridgeName:  get(idx("橋梁名")),
+        serialNo:    get(idx("整理番号")),
+      };
+      for (const col of dynamicCols) row[col] = get(idx(col));
+      return row;
+    }).filter((r) => r.projectName && r.bridgeName);
+  };
+
+  const handleProcessCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const tryRead = (encoding: string) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        if (encoding === "UTF-8" && text.includes("＝")) {
+          tryRead("Shift-JIS"); return;
+        }
+        setProcessCsvPreview(parseProcessCSV(text));
+        setProcessCsvResult(null);
+      };
+      reader.readAsText(file, encoding);
+    };
+    tryRead("UTF-8");
+  };
+
+  const execProcessImport = async () => {
+    setProcessImporting(true);
+    setProcessCsvResult(null);
+    try {
+      const res = await fetch("/api/import/process-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: processCsvPreview }),
+      });
+      const result = await res.json();
+      setProcessCsvResult({ ...result, ok: res.ok });
+      if (res.ok) {
+        const parts = [];
+        if ((result.created ?? 0) > 0) parts.push(`新規登録 ${result.created}件`);
+        if ((result.updated ?? 0) > 0) parts.push(`更新 ${result.updated}件`);
+        if ((result.skipped ?? 0) > 0) parts.push(`スキップ ${result.skipped}件`);
+        showMsg("success", `✅ インポート完了：${parts.join("、") || "対象なし"}`);
+      } else {
+        showMsg("error", "❌ インポートに失敗しました");
+      }
+    } catch {
+      showMsg("error", "❌ 通信エラーが発生しました");
+      setProcessCsvResult({ ok: false });
+    } finally {
+      setProcessImporting(false);
+    }
+  };
+
   // 休日
   const addHoliday = async () => {
     if (!holidayForm.date) { showMsg("error", "日付を入力してください"); return; }
@@ -622,6 +702,106 @@ export default function SettingsPage() {
               <button
                 onClick={() => { setCsvPreview([]); setCsvResult(null); if (fileRef.current) fileRef.current.value = ""; }}
                 className="mt-4 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
+              >
+                別のCSVをインポート
+              </button>
+            </div>
+          )}
+
+          {/* ─── 工程進捗 CSVインポート ─── */}
+          <div className="bg-white rounded-lg border border-indigo-200 p-5">
+            <h2 className="font-bold text-gray-700 mb-1">工程進捗 CSVアップロード</h2>
+            <p className="text-sm text-gray-500 mb-1">
+              形式：<code className="bg-gray-100 px-1 rounded text-xs">業務名,元請け,橋梁名,整理番号,調書作成_担当者,調書作成_開始日,調書作成_終了日,調書作成_ステータス,…</code>
+            </p>
+            <p className="text-xs text-gray-400 mb-3">
+              ※ ステータスは「未着手」「作業中」「完了」で入力。担当者が複数の場合は「・」区切り。業務・橋梁が未登録の行はスキップされます。
+            </p>
+            <input ref={processCsvRef} type="file" accept=".csv" onChange={handleProcessCsvFile} className="text-sm" />
+          </div>
+
+          {processCsvPreview.length > 0 && !processCsvResult && (() => {
+            const allKeys = Object.keys(processCsvPreview[0]);
+            const ptKeys = allKeys.filter((k) =>
+              k.endsWith("_担当者") || k.endsWith("_開始日") || k.endsWith("_終了日") || k.endsWith("_ステータス")
+            );
+            return (
+              <div className="bg-white rounded-lg border border-gray-200 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-bold text-gray-700">工程進捗プレビュー（{processCsvPreview.length}件）</h2>
+                  <button
+                    onClick={execProcessImport}
+                    disabled={processImporting}
+                    className={`px-5 py-2 rounded text-sm font-medium text-white transition-colors ${processImporting ? "bg-gray-400 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"}`}
+                  >
+                    {processImporting ? "インポート中..." : "インポート実行"}
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm whitespace-nowrap">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {["業務名", "橋梁名", "整理番号", ...ptKeys].map((h) => (
+                          <th key={h} className="text-left px-3 py-2 text-gray-600 text-xs">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {processCsvPreview.slice(0, 20).map((row: any, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="px-3 py-1.5">{row.projectName}</td>
+                          <td className="px-3 py-1.5">{row.bridgeName}</td>
+                          <td className="px-3 py-1.5 text-gray-500">{row.serialNo || "-"}</td>
+                          {ptKeys.map((k) => (
+                            <td key={k} className={`px-3 py-1.5 text-xs ${k.endsWith("_ステータス") ? "font-medium text-indigo-700" : "text-gray-500"}`}>
+                              {row[k] || "-"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                      {processCsvPreview.length > 20 && (
+                        <tr>
+                          <td colSpan={3 + ptKeys.length} className="px-3 py-2 text-xs text-gray-400 text-center">
+                            他 {processCsvPreview.length - 20} 件（プレビューは20件まで表示）
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {processCsvResult && (
+            <div className={`bg-white rounded-lg border p-5 ${processCsvResult.ok ? "border-green-300" : "border-red-300"}`}>
+              {processCsvResult.ok ? (
+                <>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-2xl">✅</span>
+                    <p className="text-green-700 font-bold text-lg">工程進捗インポート完了</p>
+                  </div>
+                  <div className="bg-green-50 rounded p-3 text-sm space-y-1">
+                    {(processCsvResult.created ?? 0) > 0 && <p className="text-green-800">✔ 新規登録：<strong>{processCsvResult.created}件</strong></p>}
+                    {(processCsvResult.updated ?? 0) > 0 && <p className="text-blue-700">✔ 更新：<strong>{processCsvResult.updated}件</strong></p>}
+                    {(processCsvResult.skipped ?? 0) > 0 && <p className="text-gray-500">スキップ：{processCsvResult.skipped}件</p>}
+                  </div>
+                  {processCsvResult.errors?.length > 0 && (
+                    <ul className="mt-3 text-sm text-orange-600 space-y-1">
+                      {processCsvResult.errors.map((e: string, i: number) => <li key={i}>・{e}</li>)}
+                    </ul>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">❌</span>
+                  <p className="text-red-700 font-bold">インポートに失敗しました</p>
+                </div>
+              )}
+              {processCsvResult.error && <p className="mt-2 text-sm text-red-600">{processCsvResult.error}</p>}
+              <button
+                onClick={() => { setProcessCsvPreview([]); setProcessCsvResult(null); if (processCsvRef.current) processCsvRef.current.value = ""; }}
+                className="mt-4 bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700"
               >
                 別のCSVをインポート
               </button>
