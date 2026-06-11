@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* スクロールバーを非表示にしつつ横スクロール可能（sticky left が機能するよう overflow-x: scroll が必要） */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ─── D3 デザイントークン ─── */
 :root {
   --ink: #232A45;

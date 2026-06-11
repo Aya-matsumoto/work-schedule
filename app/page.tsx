@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import GanttGrid from "@/components/GanttGrid";
@@ -13,12 +13,14 @@ import StatusBadge from "@/components/StatusBadge";
 import {
   formatDate, getDaysInMonth, currentMonth, prevMonth, nextMonth,
   parseYearMonth, getCurrentProcess, getEffectiveStatus,
+  getMonthSequence, calcMultiMonthBar, isWeekend,
 } from "@/lib/utils";
 
 interface Staff { id: number; name: string; }
 
 interface ProcessRecord {
   id: number;
+  processTypeId: number;
   startDate: string | null;
   endDate: string | null;
   completedDate: string | null;
@@ -103,7 +105,12 @@ export default function DashboardPage() {
   const [processTypes, setProcessTypes] = useState<ProcessType[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<number>>(new Set());
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [view, setView] = useState<"gantt" | "list">("gantt");
+  // ヘッダー・コンテンツ・下部スクロールバーの3方向同期用
+  const ganttHeaderRef = useRef<HTMLDivElement>(null);
+  const ganttContentRef = useRef<HTMLDivElement>(null);
+  const ganttScrollbarRef = useRef<HTMLDivElement>(null);
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [assignmentEditTarget, setAssignmentEditTarget] = useState<AssignmentEditTarget | null>(null);
   const [saving, setSaving] = useState(false);
@@ -123,6 +130,51 @@ export default function DashboardPage() {
   const { year, month: monthNum } = parseYearMonth(month);
   const daysInMonth = getDaysInMonth(year, monthNum);
 
+  // 6ヶ月タイムライン設定
+  const DAY_WIDTH = 26; // px/day
+  const MONTH_COUNT = 6;
+  const months = useMemo(() => getMonthSequence(month, MONTH_COUNT), [month]);
+  const totalDays = useMemo(
+    () => months.reduce((s, m) => s + getDaysInMonth(m.year, m.month), 0),
+    [months]
+  );
+  const LABEL_WIDTH = 220;
+  const timelineWidth = totalDays * DAY_WIDTH;
+
+  // タイムライン上のバー位置計算ヘルパー
+  const barPx = useCallback(
+    (start: string | null | undefined, end: string | null | undefined) =>
+      calcMultiMonthBar(start, end, month, totalDays, DAY_WIDTH),
+    [month, totalDays]
+  );
+
+  // 土日・公休日の背景セル情報（月ごとにキャッシュ）
+  const bgCells = useMemo(() => {
+    const cells: Array<{ off: boolean; holiday: boolean; isToday: boolean }> = [];
+    const today = new Date();
+    for (const m of months) {
+      const days = getDaysInMonth(m.year, m.month);
+      const holidayDays = new Set(
+        holidays
+          .filter((h) => {
+            const [hy, hm] = h.split("-").map(Number);
+            return hy === m.year && hm === m.month;
+          })
+          .map((h) => parseInt(h.split("-")[2]))
+      );
+      for (let d = 1; d <= days; d++) {
+        const isHol = holidayDays.has(d);
+        const isWe = isWeekend(m.year, m.month, d);
+        const isTod =
+          today.getFullYear() === m.year &&
+          today.getMonth() + 1 === m.month &&
+          today.getDate() === d;
+        cells.push({ off: isWe || isHol, holiday: isHol, isToday: isTod });
+      }
+    }
+    return cells;
+  }, [months, holidays]);
+
   const loadData = useCallback(() => {
     setLoading(true);
     Promise.all([
@@ -141,9 +193,10 @@ export default function DashboardPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // プロジェクトロード後、全て展開
+  // プロジェクトロード後、最初のプロジェクトを選択
   useEffect(() => {
     if (projects.length > 0) {
+      setSelectedProjectId((prev) => prev ?? projects[0].id);
       setExpandedProjectIds((prev) => {
         const next = new Set(prev);
         projects.forEach((p) => next.add(p.id));
@@ -151,6 +204,19 @@ export default function DashboardPage() {
       });
     }
   }, [projects]);
+
+  // コンテンツスクロール → 下部スクロールバー同期
+  const handleGanttScroll = useCallback(() => {
+    if (ganttScrollbarRef.current && ganttContentRef.current) {
+      ganttScrollbarRef.current.scrollLeft = ganttContentRef.current.scrollLeft;
+    }
+  }, []);
+  // 下部スクロールバー → コンテンツ同期
+  const handleScrollbarScroll = useCallback(() => {
+    if (ganttContentRef.current && ganttScrollbarRef.current) {
+      ganttContentRef.current.scrollLeft = ganttScrollbarRef.current.scrollLeft;
+    }
+  }, []);
 
   // アコーディオン開閉
   const toggleProject = useCallback((projectId: number) => {
@@ -198,6 +264,7 @@ export default function DashboardPage() {
     }));
     const tempRecord: ProcessRecord = {
       id: tempId,
+      processTypeId: data.processTypeId,
       startDate: data.startDate,
       endDate: data.endDate,
       completedDate: null,
@@ -518,6 +585,31 @@ export default function DashboardPage() {
           <div className="d3-hsub">橋梁ごとの工程スケジュールと進捗を管理します</div>
         </div>
         <div className="d3-toolbar">
+          {/* 業務プルダウン・橋梁追加（ガント時のみ） */}
+          {view === "gantt" && (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, whiteSpace: "nowrap" }}>業務：</span>
+                <select
+                  value={selectedProjectId ?? ""}
+                  onChange={(e) => setSelectedProjectId(Number(e.target.value))}
+                  className="d3-input"
+                  style={{ minWidth: 160, maxWidth: 260 }}
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                className="d3-primary"
+                onClick={() => selectedProjectId && setAddBridgeProjectId(selectedProjectId)}
+                disabled={!selectedProjectId}
+              >
+                <span style={{ fontSize: 15 }}>＋</span>橋梁を追加
+              </button>
+            </>
+          )}
           {/* ガント / リスト 切り替え */}
           <div className="d3-segwrap">
             <span className={`d3-seg${view === "gantt" ? " on" : ""}`} onClick={() => setView("gantt")}>
@@ -529,9 +621,6 @@ export default function DashboardPage() {
               リスト
             </span>
           </div>
-          <Link href="/settings" className="d3-primary">
-            <span style={{ fontSize: 15 }}>＋</span>業務を追加
-          </Link>
         </div>
       </div>
 
@@ -546,205 +635,149 @@ export default function DashboardPage() {
       ) : view === "gantt" ? (
         /* ═══════════════ ガントチャートビュー ═══════════════ */
         <div>
-          {/* 月ナビ + 工程フィルター */}
+          {/* 月ナビ */}
           <div className="d3-subrow">
             <div className="d3-month">
               <button className="d3-mbtn" onClick={() => setMonth(prevMonth(month))}>← 前月</button>
               <button className="d3-mbtn" onClick={() => setMonth(currentMonth())}>今月</button>
-              <span className="d3-mtitle"><span className="curr">{year}年{monthNum}月</span></span>
+              <span className="d3-mtitle">
+                <span className="curr">{year}年{monthNum}月</span>
+                <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500, marginLeft: 6 }}>
+                  〜 {months[months.length - 1].year}年{months[months.length - 1].month}月
+                </span>
+              </span>
               <button className="d3-mbtn" onClick={() => setMonth(nextMonth(month))}>翌月 →</button>
               {saving && <span className="d3-saving">保存中...</span>}
             </div>
-            <div className="d3-legend">
-              <button
-                className={`d3-lg${filterTypeId === null ? " all" : ""}`}
-                onClick={() => setFilterTypeId(null)}
-              >
-                全工程
-              </button>
-              {processTypes.map((pt) => (
-                <button
-                  key={pt.id}
-                  className={`d3-lg${filterTypeId === pt.id ? " on" : ""}`}
-                  onClick={() => setFilterTypeId(filterTypeId === pt.id ? null : pt.id)}
-                  style={filterTypeId === pt.id ? { borderColor: pt.color, color: pt.color } : {}}
-                >
-                  <span className="sw" style={{ backgroundColor: pt.color }} />
-                  {pt.name}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {/* アコーディオン */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {projects.map((project) => {
-              const isExpanded = expandedProjectIds.has(project.id);
-              return (
-                <div key={project.id}>
-                  {/* アコーディオンヘッダー */}
-                  <div className="d3-sec" onClick={() => toggleProject(project.id)}>
-                    <span className="tri">{isExpanded ? "▼" : "▶"}</span>
-                    <span className="sec-name">{project.name}</span>
-                    {project.client && <span className="sec-client">{project.client}</span>}
-                    <span className="sec-cnt">{project.bridges.length}橋</span>
-                    {project.deadline && (
-                      <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>期限：{formatDate(project.deadline)}</span>
-                    )}
-                    <button
-                      className="sec-add"
-                      onClick={(e) => { e.stopPropagation(); setAddBridgeProjectId(project.id); }}
-                    >
-                      ＋ 橋梁を追加
-                    </button>
-                  </div>
+          {/* ─── 6ヶ月 横スクロール ガント ─── */}
+          {(() => {
+            const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
+            return (
+              /*
+               * 1つのスクロールコンテナで縦横両方を管理。
+               * position:sticky は同一スクロールコンテナ内でのみ正しく動作する。
+               * ヘッダー行は top:0/top:28 でスティッキー、橋梁ラベルは left:0 でスティッキー。
+               */
+              <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 200px)", borderRadius: 8, border: "1px solid #E2E4EE", overflow: "hidden" }}>
+                {/* メインスクロールコンテナ（縦横両方） */}
+                <div
+                  ref={ganttContentRef}
+                  onScroll={handleGanttScroll}
+                  className="no-scrollbar"
+                  style={{ flex: 1, overflow: "auto" }}
+                >
+                  <div style={{ minWidth: LABEL_WIDTH + timelineWidth }}>
 
-                  {/* 展開コンテンツ */}
-                  {isExpanded && (
-                    <div className="d3-card" style={{ marginLeft: 16 }}>
-                      {/* 業務全体行（業務に直接登録） */}
-                      <div className="flex items-stretch border-b border-gray-100 group bg-gray-50">
-                        <div className="flex items-center px-4 py-1.5 flex-shrink-0" style={{ width: 220 }}>
-                          <span className="text-xs text-gray-400 italic">業務全体</span>
-                        </div>
-                        <div className="flex-1 border-l border-gray-100 min-w-0">
-                          <GanttGrid year={year} month={monthNum} holidays={holidays}>
-                            <div
-                              className="relative cursor-cell"
-                              style={{ height: 32 }}
-                              onClick={(e) => handleGridClick(e, { projectId: project.id, projectName: project.name })}
-                            >
-                              {project.processes
-                                .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
-                                .map((proc) => (
-                                  <GanttBar
-                                    key={proc.id}
-                                    id={proc.id}
-                                    startDate={proc.startDate}
-                                    endDate={proc.endDate}
-                                    completedDate={proc.completedDate}
-                                    color={proc.processType.color}
-                                    staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)}
-                                    processName={proc.processType.name}
-                                    year={year}
-                                    month={monthNum}
-                                    onDragEnd={handleDragEnd}
-                                    onClick={(rid) => handleBarClick(rid, project.processes, project.name, "業務全体")}
-                                  />
-                                ))}
-                            </div>
-                          </GanttGrid>
-                        </div>
-                      </div>
-
-                      {/* 橋梁がない場合 */}
-                      {project.bridges.length === 0 && (
-                        <div style={{ padding: "16px", textAlign: "center", color: "var(--muted)", fontSize: 12, fontWeight: 600 }}>
-                          橋梁が未登録です。上の「＋橋梁を追加」から追加できます。
-                        </div>
-                      )}
-
-                      {/* 橋梁行 */}
-                      {project.bridges.map((bridge) => (
-                        <div key={bridge.id} className="d3-row group" style={{ minHeight: 44 }}>
-                          <div className="d3-rl" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                            <button
-                              onClick={() => router.push(`/bridges/${bridge.id}`)}
-                              style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0 }}
-                            >
-                              <div className="nm" style={{ truncate: true }}>{bridge.name}</div>
-                              {bridge.serialNo && <div className="no">{bridge.serialNo}</div>}
-                            </button>
-                            <button
-                              onClick={() => handleBridgeDelete(bridge.id, bridge.name)}
-                              className="opacity-0 group-hover:opacity-100 transition-all"
-                              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "0 4px", flexShrink: 0 }}
-                              title="この橋梁を削除"
-                            >
-                              🗑
-                            </button>
-                          </div>
-                          <div className="flex-1 border-l border-gray-100 min-w-0">
-                            <GanttGrid year={year} month={monthNum} holidays={holidays}>
-                              <div
-                                className="relative cursor-cell"
-                                style={{ height: 36 }}
-                                onClick={(e) => handleGridClick(e, { projectId: project.id, projectName: project.name, bridgeId: bridge.id, bridgeName: bridge.name })}
-                              >
-                                {/* 自動割り振りバー：全工程 or 各工程フィルターに一致するもののみ表示 */}
-                                {bridge.assignments
-                                  ?.filter((a) => {
-                                    if (filterTypeId === null) return true;
-                                    // processTypeId がある場合はそれで照合、null なら調書作成扱い
-                                    if (a.processTypeId != null) return a.processTypeId === filterTypeId;
-                                    const chosho = processTypes.find((pt) => pt.name === "調書作成");
-                                    return chosho?.id === filterTypeId;
-                                  })
-                                  .map((a) => {
-                                    const ptColor = a.processType?.color ?? processTypes.find((pt) => pt.name === "調書作成")?.color ?? "#EF4444";
-                                    const cfg = a.processTypeId != null
-                                      ? bridge.processConfigs?.find((c) => c.processTypeId === a.processTypeId)
-                                      : bridge.processConfigs?.find((c) => c.processTypeId === processTypes.find((pt) => pt.name === "調書作成")?.id);
-                                    return (
-                                      <GanttBar
-                                        key={`assign-${a.id}`}
-                                        id={a.id}
-                                        startDate={a.startDate}
-                                        endDate={a.endDate}
-                                        color={ptColor}
-                                        staffName={a.staff.name}
-                                        processName={a.processType?.name ?? "調書作成"}
-                                        customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`}
-                                        requiredHours={cfg?.requiredHours ?? null}
-                                        year={year}
-                                        month={monthNum}
-                                        onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)}
-                                        onClick={(aid) => handleAssignmentBarClick(aid, bridge, project.name)}
-                                      />
-                                    );
-                                  })}
-                                {/* 工程バー：割り振りバーが存在する工程は ProcessRecord を非表示（割り振りバーが代替） */}
-                                {bridge.processes
-                                  .filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId)
-                                  .filter((proc) => {
-                                    // その工程種別の割り振りバーが存在する場合はProcessRecordを非表示
-                                    const hasAssignment = bridge.assignments?.some(
-                                      (a) => (a.processTypeId === proc.processType.id) ||
-                                              (a.processTypeId == null && proc.processType.name === "調書作成")
-                                    );
-                                    return !hasAssignment;
-                                  })
-                                  .map((proc) => {
-                                    const procCfg = bridge.processConfigs?.find((c) => c.processTypeId === proc.processType.id);
-                                    return (
-                                      <GanttBar
-                                        key={proc.id}
-                                        id={proc.id}
-                                        startDate={proc.startDate}
-                                        endDate={proc.endDate}
-                                        completedDate={proc.completedDate}
-                                        color={proc.processType.color}
-                                        staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)}
-                                        processName={proc.processType.name}
-                                        requiredHours={procCfg?.requiredHours ?? null}
-                                        year={year}
-                                        month={monthNum}
-                                        onDragEnd={handleDragEnd}
-                                        onClick={(rid) => handleBarClick(rid, bridge.processes, project.name, bridge.name)}
-                                      />
-                                    );
-                                  })}
-                              </div>
-                            </GanttGrid>
-                          </div>
+                    {/* 月ヘッダー行（sticky top:0） */}
+                    <div style={{ position: "sticky", top: 0, zIndex: 30, display: "flex", background: "var(--surface, #F7F8FC)", borderBottom: "2px solid #E2E4EE" }}>
+                      {/* 左上コーナー */}
+                      <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: "sticky", left: 0, zIndex: 31, background: "var(--surface, #F7F8FC)", borderRight: "1px solid #E2E4EE" }} />
+                      {months.map((m) => (
+                        <div key={m.ym} style={{ width: getDaysInMonth(m.year, m.month) * DAY_WIDTH, flexShrink: 0, textAlign: "center", fontSize: 12, fontWeight: 700, color: "var(--ink)", padding: "5px 0", borderRight: "1px solid #E2E4EE", borderLeft: "1px solid #C5C8D8" }}>
+                          {m.year}年{m.month}月
                         </div>
                       ))}
                     </div>
-                  )}
+
+                    {/* 日ヘッダー行（sticky top:28） */}
+                    <div style={{ position: "sticky", top: 28, zIndex: 30, display: "flex", background: "var(--surface, #F7F8FC)", borderBottom: "1px solid #E2E4EE" }}>
+                      {/* 左上コーナー */}
+                      <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: "sticky", left: 0, zIndex: 31, background: "var(--surface, #F7F8FC)", borderRight: "1px solid #E2E4EE" }} />
+                      {bgCells.map((cell, i) => {
+                        let offset = i, dayNum = 0;
+                        for (const m of months) {
+                          const days = getDaysInMonth(m.year, m.month);
+                          if (offset < days) { dayNum = offset + 1; break; }
+                          offset -= days;
+                        }
+                        return (
+                          <div key={i} style={{ width: DAY_WIDTH, flexShrink: 0, textAlign: "center", fontSize: 9, padding: "2px 0", color: cell.holiday ? "#F87171" : cell.off ? "#9CA3AF" : "#6B7280", background: cell.holiday ? "#FEF2F2" : cell.off ? "#F3F4F6" : undefined, borderRight: "1px solid #EEF0F6" }}>
+                            {dayNum}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* コンテンツ行 */}
+                    {!selectedProject ? (
+                      <div style={{ padding: 24, textAlign: "center", color: "var(--muted)", fontSize: 13 }}>業務を選択してください</div>
+                    ) : (
+                      <div style={{ borderRadius: "0 0 8px 8px", overflow: "visible" }}>
+                        {/* 業務全体行 */}
+                        <div style={{ display: "flex", alignItems: "stretch", borderBottom: "1px solid #F1F3F9", background: "#FAFBFC" }}>
+                          <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: "sticky", left: 0, zIndex: 15, background: "#FAFBFC", borderRight: "1px solid #E2E4EE", display: "flex", alignItems: "center", padding: "0 12px" }}>
+                            <span style={{ fontSize: 11, color: "var(--muted)", fontStyle: "italic" }}>業務全体</span>
+                          </div>
+                          <div style={{ position: "relative", width: timelineWidth, height: 32, flexShrink: 0, cursor: "cell" }} onClick={(e) => handleGridClick(e, { projectId: selectedProject.id, projectName: selectedProject.name })}>
+                            <div className="absolute inset-0 flex pointer-events-none">
+                              {bgCells.map((cell, i) => <div key={i} style={{ width: DAY_WIDTH, flexShrink: 0, height: "100%", background: cell.holiday ? "rgba(254,226,226,0.5)" : cell.off ? "rgba(0,0,0,0.025)" : undefined }} />)}
+                            </div>
+                            {bgCells.map((cell, i) => cell.isToday ? <div key="today" className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: (i + 0.5) * DAY_WIDTH, width: 1, background: "#F87171" }} /> : null)}
+                            {selectedProject.processes.filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId).map((proc) => {
+                              const px = barPx(proc.startDate, proc.endDate);
+                              if (!px) return null;
+                              return <GanttBar key={proc.id} id={proc.id} startDate={proc.startDate} endDate={proc.endDate} completedDate={proc.completedDate} color={proc.processType.color} staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)} processName={proc.processType.name} year={year} month={monthNum} pixelLeft={px.left} pixelWidth={px.width} dayWidth={DAY_WIDTH} onDragEnd={handleDragEnd} onClick={(rid) => handleBarClick(rid, selectedProject.processes, selectedProject.name, "業務全体")} />;
+                            })}
+                          </div>
+                        </div>
+
+                        {selectedProject.bridges.length === 0 && (
+                          <div style={{ padding: "16px", textAlign: "center", color: "var(--muted)", fontSize: 12, fontWeight: 600 }}>
+                            橋梁が未登録です。上の「＋橋梁を追加」から追加できます。
+                          </div>
+                        )}
+
+                        {/* 橋梁行 */}
+                        {selectedProject.bridges.map((bridge) => (
+                          <div key={bridge.id} className="group" style={{ display: "flex", alignItems: "stretch", borderBottom: "1px solid #F1F3F9", minHeight: 44 }}>
+                            {/* 橋梁名ラベル（left:0 でスティッキー） */}
+                            <div style={{ width: LABEL_WIDTH, flexShrink: 0, position: "sticky", left: 0, zIndex: 15, background: "white", borderRight: "1px solid #E2E4EE", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px 0 12px" }}>
+                              <button onClick={() => router.push(`/bridges/${bridge.id}`)} style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: 0, minWidth: 0 }}>
+                                <div className="nm" style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{bridge.name}</div>
+                                {bridge.serialNo && <div className="no" style={{ fontSize: 11, color: "var(--muted)" }}>{bridge.serialNo}</div>}
+                              </button>
+                              <button onClick={() => handleBridgeDelete(bridge.id, bridge.name)} className="opacity-0 group-hover:opacity-100 transition-all" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "0 4px", flexShrink: 0 }} title="この橋梁を削除">🗑</button>
+                            </div>
+
+                            {/* ガントエリア */}
+                            <div style={{ position: "relative", width: timelineWidth, height: 44, flexShrink: 0, cursor: "cell" }} onClick={(e) => handleGridClick(e, { projectId: selectedProject.id, projectName: selectedProject.name, bridgeId: bridge.id, bridgeName: bridge.name })}>
+                              <div className="absolute inset-0 flex pointer-events-none">
+                                {bgCells.map((cell, i) => <div key={i} style={{ width: DAY_WIDTH, flexShrink: 0, height: "100%", background: cell.holiday ? "rgba(254,226,226,0.5)" : cell.off ? "rgba(0,0,0,0.025)" : undefined }} />)}
+                              </div>
+                              {bgCells.map((cell, i) => cell.isToday ? <div key="today" className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: (i + 0.5) * DAY_WIDTH, width: 1, background: "#F87171" }} /> : null)}
+                              {(() => { let offset = 0; return months.slice(0, -1).map((m) => { offset += getDaysInMonth(m.year, m.month) * DAY_WIDTH; return <div key={m.ym} className="absolute top-0 bottom-0 pointer-events-none" style={{ left: offset, width: 1, background: "#C5C8D8" }} />; }); })()}
+
+                              {bridge.assignments?.filter((a) => { if (filterTypeId === null) return true; if (a.processTypeId != null) return a.processTypeId === filterTypeId; return processTypes.find((pt) => pt.name === "調書作成")?.id === filterTypeId; }).map((a) => {
+                                const px = barPx(a.startDate, a.endDate);
+                                if (!px) return null;
+                                const ptColor = a.processType?.color ?? processTypes.find((pt) => pt.name === "調書作成")?.color ?? "#EF4444";
+                                const cfg = a.processTypeId != null ? bridge.processConfigs?.find((c) => c.processTypeId === a.processTypeId) : bridge.processConfigs?.find((c) => c.processTypeId === processTypes.find((pt) => pt.name === "調書作成")?.id);
+                                return <GanttBar key={`assign-${a.id}`} id={a.id} startDate={a.startDate} endDate={a.endDate} color={ptColor} staffName={a.staff.name} processName={a.processType?.name ?? "調書作成"} customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`} requiredHours={cfg?.requiredHours ?? null} year={year} month={monthNum} pixelLeft={px.left} pixelWidth={px.width} dayWidth={DAY_WIDTH} onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)} onClick={(aid) => handleAssignmentBarClick(aid, bridge, selectedProject.name)} />;
+                              })}
+
+                              {bridge.processes.filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId).filter((proc) => !bridge.assignments?.some((a) => (a.processTypeId === proc.processType.id) || (a.processTypeId == null && proc.processType.name === "調書作成"))).map((proc) => {
+                                const px = barPx(proc.startDate, proc.endDate);
+                                if (!px) return null;
+                                const procCfg = bridge.processConfigs?.find((c) => c.processTypeId === proc.processType.id);
+                                return <GanttBar key={proc.id} id={proc.id} startDate={proc.startDate} endDate={proc.endDate} completedDate={proc.completedDate} color={proc.processType.color} staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)} processName={proc.processType.name} requiredHours={procCfg?.requiredHours ?? null} year={year} month={monthNum} pixelLeft={px.left} pixelWidth={px.width} dayWidth={DAY_WIDTH} onDragEnd={handleDragEnd} onClick={(rid) => handleBarClick(rid, bridge.processes, selectedProject.name, bridge.name)} />;
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* 常時表示の横スクロールバー（下部固定） */}
+                <div ref={ganttScrollbarRef} onScroll={handleScrollbarScroll} style={{ overflowX: "auto", overflowY: "hidden", flexShrink: 0, borderTop: "1px solid #E2E4EE" }}>
+                  <div style={{ width: LABEL_WIDTH + timelineWidth, height: 1 }} />
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ) : (
         /* ═══════════════ リストビュー ═══════════════ */

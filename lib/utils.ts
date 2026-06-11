@@ -163,6 +163,51 @@ export function compareSerialNo(a: string | null, b: string | null): number {
   return 0;
 }
 
+// 指定月から count ヶ月分の配列を返す
+export function getMonthSequence(
+  startYM: string,
+  count: number
+): Array<{ year: number; month: number; ym: string }> {
+  const result: Array<{ year: number; month: number; ym: string }> = [];
+  let ym = startYM;
+  for (let i = 0; i < count; i++) {
+    const { year, month } = parseYearMonth(ym);
+    result.push({ year, month, ym });
+    ym = nextMonth(ym);
+  }
+  return result;
+}
+
+// 複数月タイムライン上のバー位置をピクセルで計算
+export function calcMultiMonthBar(
+  startDate: string | Date | null | undefined,
+  endDate: string | Date | null | undefined,
+  timelineStartYM: string,
+  totalDays: number,
+  dayWidth: number
+): { left: number; width: number } | null {
+  if (!startDate) return null;
+  const { year, month } = parseYearMonth(timelineStartYM);
+  const timelineStart = new Date(year, month - 1, 1);
+  const timelineEnd = new Date(timelineStart.getTime() + totalDays * 86400000 - 1);
+
+  const start = new Date(startDate);
+  const end = endDate ? new Date(endDate) : new Date(startDate);
+
+  if (start > timelineEnd || end < timelineStart) return null;
+
+  const clampedStart = start < timelineStart ? timelineStart : start;
+  const clampedEnd = end > timelineEnd ? timelineEnd : end;
+
+  const startOffset = Math.round((clampedStart.getTime() - timelineStart.getTime()) / 86400000);
+  const endOffset = Math.round((clampedEnd.getTime() - timelineStart.getTime()) / 86400000);
+
+  return {
+    left: startOffset * dayWidth,
+    width: Math.max((endOffset - startOffset + 1) * dayWidth, dayWidth),
+  };
+}
+
 // ガントバーの left% と width% を計算
 export function calcGanttBar(
   startDate: Date | string | null | undefined,

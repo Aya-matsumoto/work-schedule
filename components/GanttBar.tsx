@@ -14,6 +14,10 @@ interface Props {
   requiredHours?: number | null;
   year: number;
   month: number;
+  // ピクセルモード（6ヶ月ビュー用）
+  pixelLeft?: number;
+  pixelWidth?: number;
+  dayWidth?: number;
   onDragEnd?: (id: number, newStart: string, newEnd: string) => void;
   onClick?: (id: number) => void;
 }
@@ -26,12 +30,15 @@ function addDays(dateStr: string, days: number): string {
 
 export default function GanttBar({
   id, startDate, endDate, completedDate, color,
-  staffName, processName, customLabel, requiredHours, year, month, onDragEnd, onClick,
+  staffName, processName, customLabel, requiredHours,
+  year, month, pixelLeft, pixelWidth, dayWidth = 26,
+  onDragEnd, onClick,
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const daysInMonth = getDaysInMonth(year, month);
-  const bar = calcGanttBar(startDate, endDate, year, month);
-  if (!bar) return null;
+  const isPixelMode = pixelLeft != null && pixelWidth != null;
+  const bar = isPixelMode ? null : calcGanttBar(startDate, endDate, year, month);
+  if (!isPixelMode && !bar) return null;
 
   const label = customLabel ?? staffName ?? processName;
   const hoursStr = requiredHours != null ? `\n必要時間: ${Number(requiredHours).toFixed(1)}h` : "";
@@ -45,21 +52,25 @@ export default function GanttBar({
     if (!container) return;
 
     const containerRect = container.getBoundingClientRect();
-    const pixelsPerDay = containerRect.width / daysInMonth;
+    const pixelsPerDay = isPixelMode ? dayWidth : containerRect.width / daysInMonth;
     const startX = e.clientX;
     let deltaDays = 0;
     let hasMoved = false;
 
     // ドラッグ中のビジュアル更新
     const barEl = barRef.current!;
-    const origLeft = bar.left;
+    const origLeft = isPixelMode ? pixelLeft! : bar!.left;
 
     const onMouseMove = (ev: MouseEvent) => {
       const deltaX = ev.clientX - startX;
       if (Math.abs(deltaX) > 4) hasMoved = true;
       deltaDays = Math.round(deltaX / pixelsPerDay);
-      const newLeft = Math.max(0, Math.min(100 - bar.width, origLeft + (deltaDays / daysInMonth) * 100));
-      barEl.style.left = `${newLeft}%`;
+      if (isPixelMode) {
+        barEl.style.left = `${origLeft + deltaDays * dayWidth}px`;
+      } else {
+        const newLeft = Math.max(0, Math.min(100 - bar!.width, origLeft + (deltaDays / daysInMonth) * 100));
+        barEl.style.left = `${newLeft}%`;
+      }
     };
 
     const onMouseUp = () => {
@@ -68,7 +79,7 @@ export default function GanttBar({
 
       if (!hasMoved) {
         // クリック → 編集
-        barEl.style.left = `${origLeft}%`;
+        barEl.style.left = isPixelMode ? `${origLeft}px` : `${origLeft}%`;
         onClick?.(id);
       } else {
         // ドラッグ完了 → 日程更新
@@ -77,7 +88,7 @@ export default function GanttBar({
           const newEnd = addDays(endDate ?? startDate, deltaDays);
           onDragEnd(id, newStart, newEnd);
         } else {
-          barEl.style.left = `${origLeft}%`;
+          barEl.style.left = isPixelMode ? `${origLeft}px` : `${origLeft}%`;
         }
       }
     };
@@ -91,7 +102,11 @@ export default function GanttBar({
       ref={barRef}
       title={tooltip}
       className="absolute top-1 bottom-1 rounded flex items-center overflow-hidden select-none cursor-grab active:cursor-grabbing z-10 hover:brightness-110 transition-none"
-      style={{ left: `${bar.left}%`, width: `${bar.width}%`, backgroundColor: color }}
+      style={
+        isPixelMode
+          ? { left: pixelLeft, width: pixelWidth, backgroundColor: color }
+          : { left: `${bar!.left}%`, width: `${bar!.width}%`, backgroundColor: color }
+      }
       onMouseDown={handleMouseDown}
       onClick={(e) => e.stopPropagation()}
     >
