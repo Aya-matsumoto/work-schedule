@@ -68,8 +68,9 @@ function AssignmentBar({ assignment, year, month, staffColor, onDragEnd, onClick
 
   if (!assignment.startDate || !assignment.endDate) return null;
 
+  // monthEnd はローカル時間の月末23:59:59に設定（UTC解析のbarStartとのズレを防ぐ）
   const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0);
+  const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
   const barStart = new Date(assignment.startDate);
   const barEnd = new Date(assignment.endDate);
 
@@ -142,10 +143,11 @@ function AssignmentBar({ assignment, year, month, staffColor, onDragEnd, onClick
 
 // 旗マーク（点検完了日）
 function InspectionFlag({ date, year, month }: { date: string; year: number; month: number }) {
-  const d = new Date(date);
-  if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return null;
+  // "YYYY-MM-DD" をローカル時間でパース（UTC解析による月ズレを防ぐ）
+  const [y, mo, d] = date.slice(0, 10).split("-").map(Number);
+  if (y !== year || mo !== month) return null;
   const daysInMonth = getDaysInMonth(year, month);
-  const leftPct = ((d.getDate() - 1) / daysInMonth) * 100;
+  const leftPct = ((d - 1) / daysInMonth) * 100;
   return (
     <div
       className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none"
