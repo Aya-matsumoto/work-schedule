@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
             // 自動割り振り結果も含める
             assignments: {
               include: { staff: true, processType: true },
+              orderBy: { id: "asc" },
             },
             // 工程別必要時間設定
             processConfigs: true,

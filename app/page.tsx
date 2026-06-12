@@ -40,6 +40,7 @@ interface BridgeAssignment {
   startDate: string | null;
   endDate: string | null;
   isManual: boolean;
+  inspectionDoneDate: string | null;
   staff: { id: number; name: string; color: string };
 }
 
@@ -145,6 +146,16 @@ export default function DashboardPage() {
   const barPx = useCallback(
     (start: string | null | undefined, end: string | null | undefined) =>
       calcMultiMonthBar(start, end, month, totalDays, DAY_WIDTH),
+    [month, totalDays]
+  );
+
+  // 点検完了日のピクセル位置を計算（タイムライン外はnull）
+  const flagPx = useCallback(
+    (dateStr: string | null | undefined): number | null => {
+      if (!dateStr) return null;
+      const px = calcMultiMonthBar(dateStr, dateStr, month, totalDays, DAY_WIDTH);
+      return px ? px.left : null;
+    },
     [month, totalDays]
   );
 
@@ -748,6 +759,23 @@ export default function DashboardPage() {
                               </div>
                               {bgCells.map((cell, i) => cell.isToday ? <div key="today" className="absolute top-0 bottom-0 pointer-events-none z-10" style={{ left: (i + 0.5) * DAY_WIDTH, width: 1, background: "#F87171" }} /> : null)}
                               {(() => { let offset = 0; return months.slice(0, -1).map((m) => { offset += getDaysInMonth(m.year, m.month) * DAY_WIDTH; return <div key={m.ym} className="absolute top-0 bottom-0 pointer-events-none" style={{ left: offset, width: 1, background: "#C5C8D8" }} />; }); })()}
+
+                              {/* 点検完了日の旗マーク */}
+                              {(() => {
+                                const inspDate = bridge.assignments?.find((a) => a.inspectionDoneDate)?.inspectionDoneDate;
+                                const left = flagPx(inspDate);
+                                if (left == null) return null;
+                                return (
+                                  <div
+                                    className="absolute top-0 bottom-0 pointer-events-none"
+                                    style={{ left, zIndex: 8, display: "flex", flexDirection: "column", alignItems: "center" }}
+                                    title={`点検完了日：${inspDate}`}
+                                  >
+                                    <span style={{ fontSize: 11, lineHeight: 1 }}>🚩</span>
+                                    <div style={{ width: 1, flex: 1, background: "#FB923C", opacity: 0.7 }} />
+                                  </div>
+                                );
+                              })()}
 
                               {bridge.assignments?.filter((a) => { if (filterTypeId === null) return true; if (a.processTypeId != null) return a.processTypeId === filterTypeId; return processTypes.find((pt) => pt.name === "調書作成")?.id === filterTypeId; }).map((a) => {
                                 const px = barPx(a.startDate, a.endDate);
