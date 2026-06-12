@@ -207,6 +207,7 @@ export default function AutoAssignPage() {
   // 連動移動ダイアログ
   const [shiftDialog, setShiftDialog] = useState<{ staffId: number; staffName: string } | null>(null);
   const [shiftDays, setShiftDays] = useState("0");
+  const [shiftLoading, setShiftLoading] = useState(false);
 
   // バー編集ダイアログ
   const [editTarget, setEditTarget] = useState<Assignment | null>(null);
@@ -492,30 +493,36 @@ export default function AutoAssignPage() {
     const days = parseInt(shiftDays);
     if (isNaN(days) || days === 0) { setShiftDialog(null); return; }
 
-    const res = await fetch("/api/assignments/shift-all", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ staffId: shiftDialog.staffId, fiscalYear, shiftDays: days, force }),
-    });
-    const data = await res.json();
+    setShiftLoading(true);
+    try {
+      const res = await fetch("/api/assignments/shift-all", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId: shiftDialog.staffId, fiscalYear, shiftDays: days, force }),
+      });
+      const data = await res.json();
 
-    if (res.status === 409 && data.requireForce) {
-      const vMsg = data.violations.map((v: any) =>
-        `橋梁ID:${v.bridgeId} 制約違反（${v.limit} 以降でないといけません）`
-      ).join("\n");
-      if (confirm(`以下の制約違反があります。それでも移動しますか？\n\n${vMsg}`)) {
-        await handleShiftAll(true);
+      if (res.status === 409 && data.requireForce) {
+        setShiftLoading(false);
+        const vMsg = data.violations.map((v: any) =>
+          `橋梁ID:${v.bridgeId} 制約違反（${v.limit} 以降でないといけません）`
+        ).join("\n");
+        if (confirm(`以下の制約違反があります。それでも移動しますか？\n\n${vMsg}`)) {
+          await handleShiftAll(true);
+        }
+        return;
       }
-      return;
-    }
 
-    if (res.ok) {
-      setMsg({ type: "success", text: `✅ ${data.updated}件の割り当てを ${days > 0 ? "+" : ""}${days}日ずらしました` });
-      setShiftDialog(null);
-      setShiftDays("0");
-      await loadData();
-    } else {
-      setMsg({ type: "error", text: `❌ ${data.error ?? "移動失敗"}` });
+      if (res.ok) {
+        setMsg({ type: "success", text: `✅ ${data.updated}件の割り当てを ${days > 0 ? "+" : ""}${days}日ずらしました` });
+        setShiftDialog(null);
+        setShiftDays("0");
+        await loadData();
+      } else {
+        setMsg({ type: "error", text: `❌ ${data.error ?? "移動失敗"}` });
+      }
+    } finally {
+      setShiftLoading(false);
     }
   };
 
@@ -935,7 +942,7 @@ export default function AutoAssignPage() {
 
       {/* ─── 連動移動ダイアログ ─── */}
       {shiftDialog && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={() => setShiftDialog(null)}>
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50" onClick={() => { if (!shiftLoading) setShiftDialog(null); }}>
           <div className="bg-white rounded-lg shadow-xl w-80 mx-4 p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-gray-800 mb-1">連動移動</h3>
             <p className="text-xs text-gray-500 mb-4">{shiftDialog.staffName} の全割り当てをずらします</p>
@@ -944,19 +951,29 @@ export default function AutoAssignPage() {
                 type="number"
                 value={shiftDays}
                 onChange={(e) => setShiftDays(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm w-24 text-center"
+                disabled={shiftLoading}
+                className="border border-gray-300 rounded px-3 py-2 text-sm w-24 text-center disabled:opacity-50"
                 placeholder="日数"
               />
               <span className="text-sm text-gray-600">日ずらす（マイナスで前倒し）</span>
             </div>
+            {shiftLoading && (
+              <p className="text-sm text-blue-600 font-medium mb-3 text-center animate-pulse">⏳ 実行中...</p>
+            )}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShiftDialog(null)} className="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50">キャンセル</button>
+              <button
+                onClick={() => setShiftDialog(null)}
+                disabled={shiftLoading}
+                className="border border-gray-300 px-4 py-2 rounded text-sm hover:bg-gray-50 disabled:opacity-40"
+              >
+                キャンセル
+              </button>
               <button
                 onClick={() => handleShiftAll(false)}
-                disabled={shiftDays === "0" || shiftDays === ""}
+                disabled={shiftLoading || shiftDays === "0" || shiftDays === ""}
                 className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-40"
               >
-                実行
+                {shiftLoading ? "実行中..." : "実行"}
               </button>
             </div>
           </div>
