@@ -77,11 +77,13 @@ export async function POST(req: NextRequest) {
       // 業務を探す・なければ作成
       let project = await prisma.project.findFirst({ where: { name: projectName } });
       if (!project) {
+        const maxOrder = await prisma.project.aggregate({ _max: { displayOrder: true } });
         project = await prisma.project.create({
           data: {
             name: projectName,
             client: client || null,
             fiscalYear: projectName.match(/^[A-Z]\d+/)?.[0] ?? null,
+            displayOrder: (maxOrder._max.displayOrder ?? 0) + 1,
           },
         });
       } else if (client && !project.client) {
