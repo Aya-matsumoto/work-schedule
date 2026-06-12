@@ -45,15 +45,15 @@ export default function BridgeDetailPage() {
     name: "", serialNo: "", spans: "", inspectionDate: "", inspectionNote: "",
   });
 
-  useEffect(() => {
-    Promise.all([
+  const loadBridgeData = useCallback((typesData?: ProcessType[]) => {
+    return Promise.all([
       fetch(`/api/bridges/${params.id}`).then((r) => r.json()),
       fetch("/api/staff").then((r) => r.json()),
-      fetch("/api/process-types").then((r) => r.json()),
-    ]).then(([bridgeData, staffData, typesData]) => {
+      typesData ? Promise.resolve(typesData) : fetch("/api/process-types").then((r) => r.json()),
+    ]).then(([bridgeData, staffData, resolvedTypes]) => {
       setBridge(bridgeData);
       setStaff(staffData);
-      setProcessTypes(typesData);
+      setProcessTypes(resolvedTypes);
       setBridgeForm({
         name: bridgeData.name, serialNo: bridgeData.serialNo ?? "",
         spans: bridgeData.spans?.toString() ?? "",
@@ -63,7 +63,7 @@ export default function BridgeDetailPage() {
       // 工程行を構築
       const existing: ProcessRecord[] = bridgeData.processes ?? [];
       const rows: ProcessRecord[] = [];
-      for (const pt of typesData) {
+      for (const pt of (resolvedTypes as ProcessType[])) {
         const matching = existing.filter((p: ProcessRecord) => p.processTypeId === pt.id);
         if (matching.length === 0) {
           rows.push({ id: null, processTypeId: pt.id, processType: pt, staffId: null, staffIds: [], status: "NOT_STARTED", startDate: null, endDate: null, completedDate: null, note: null, iteration: 1 });
@@ -80,6 +80,8 @@ export default function BridgeDetailPage() {
       setLoading(false);
     });
   }, [params.id]);
+
+  useEffect(() => { loadBridgeData(); }, [loadBridgeData]);
 
   const handleProcessChange = useCallback((index: number, field: string, value: string | null) => {
     setFormProcesses((prev) => {
@@ -125,6 +127,7 @@ export default function BridgeDetailPage() {
           await fetch(`/api/processes/${row.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         }
       }
+      await loadBridgeData(processTypes);
       setIsDirty(false);
       setMessage({ type: "success", text: "保存しました" });
       setTimeout(() => setMessage(null), 3000);
