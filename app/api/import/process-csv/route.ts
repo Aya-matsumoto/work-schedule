@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
           const created = await prisma.processRecord.create({
             data: {
               bridgeId: bridge.id,
-              projectId: project.id,
+              projectId: null,
               processTypeId: ptId,
               staffId: primaryStaffId,
               startDate,
