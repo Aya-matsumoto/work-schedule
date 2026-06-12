@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-// GET /api/staff/schedule?month=YYYY-MM
+// GET /api/staff/schedule?month=YYYY-MM&endMonth=YYYY-MM
 export async function GET(req: NextRequest) {
   try {
     const monthStr = req.nextUrl.searchParams.get("month");
+    const endMonthStr = req.nextUrl.searchParams.get("endMonth");
     if (!monthStr) return NextResponse.json({ error: "月を指定してください" }, { status: 400 });
 
     const [year, month] = monthStr.split("-").map(Number);
     const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0, 23, 59, 59);
+
+    let monthEnd: Date;
+    if (endMonthStr) {
+      const [ey, em] = endMonthStr.split("-").map(Number);
+      monthEnd = new Date(ey, em, 0, 23, 59, 59);
+    } else {
+      monthEnd = new Date(year, month, 0, 23, 59, 59);
+    }
 
     const processWhereClause = {
       OR: [
