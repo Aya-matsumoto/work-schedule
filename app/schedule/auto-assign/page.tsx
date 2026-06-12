@@ -214,7 +214,8 @@ export default function AutoAssignPage() {
   const [editForm, setEditForm] = useState({ startDate: "", endDate: "" });
 
   // ─── データ読み込み ─────────────────────────────────────
-  const loadData = useCallback(async () => {
+  // keepProjectId: 再読み込み後も保持したい業務ID（省略時は現在の選択を維持）
+  const loadData = useCallback(async (keepProjectId?: number | null) => {
     setLoading(true);
     const [projectsRes, staffRes, assignRes, ptsRes, cfgRes] = await Promise.all([
       fetch(`/api/gantt/dashboard?month=${fiscalYear}-04`).then((r) => r.json()),
@@ -272,11 +273,11 @@ export default function AutoAssignPage() {
     }
     setInspectionDates(dMap);
 
-    // 最初の業務を選択
-    const initProjectId = selectedProjectId ?? (pList.length > 0 ? pList[0].id : null);
-    if (pList.length > 0 && selectedProjectId === null) {
-      setSelectedProjectId(pList[0].id);
-    }
+    // 業務選択：keepProjectId > 現在の選択 > 先頭
+    const resolvedId = keepProjectId ?? selectedProjectId ?? (pList.length > 0 ? pList[0].id : null);
+    const validId = resolvedId && pList.some((p) => p.id === resolvedId) ? resolvedId : (pList[0]?.id ?? null);
+    if (validId !== selectedProjectId) setSelectedProjectId(validId);
+    const initProjectId = validId;
 
     // 選択中業務の工程別担当者を読み込む
     if (initProjectId) {
@@ -442,7 +443,7 @@ export default function AutoAssignPage() {
         } else {
           setUnassignedBridges([]);
         }
-        await loadData();
+        await loadData(selectedProjectId);
       } else {
         setMsg({ type: "error", text: `❌ ${data.error ?? "割り振り失敗"}` });
       }
@@ -517,7 +518,7 @@ export default function AutoAssignPage() {
         setMsg({ type: "success", text: `✅ ${data.updated}件の割り当てを ${days > 0 ? "+" : ""}${days}日ずらしました` });
         setShiftDialog(null);
         setShiftDays("0");
-        await loadData();
+        await loadData(selectedProjectId);
       } else {
         setMsg({ type: "error", text: `❌ ${data.error ?? "移動失敗"}` });
       }
