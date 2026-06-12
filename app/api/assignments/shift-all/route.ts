@@ -28,7 +28,7 @@ export async function PUT(req: NextRequest) {
 
       if (a.inspectionDoneDate) {
         const limit = new Date(a.inspectionDoneDate);
-        limit.setDate(limit.getDate() + 8);
+        limit.setDate(limit.getDate() + 1);
         if (newStart < limit) {
           violations.push({
             bridgeId: a.bridgeId,
