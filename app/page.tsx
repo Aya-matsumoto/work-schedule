@@ -785,7 +785,13 @@ export default function DashboardPage() {
                                 return <GanttBar key={`assign-${a.id}`} id={a.id} startDate={a.startDate} endDate={a.endDate} color={ptColor} staffName={a.staff.name} processName={a.processType?.name ?? "調書作成"} customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`} requiredHours={cfg?.requiredHours ?? null} year={year} month={monthNum} pixelLeft={px.left} pixelWidth={px.width} dayWidth={DAY_WIDTH} onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)} onClick={(aid) => handleAssignmentBarClick(aid, bridge, selectedProject.name)} />;
                               })}
 
-                              {bridge.processes.filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId).filter((proc) => !bridge.assignments?.some((a) => (a.processTypeId === proc.processType.id) || (a.processTypeId == null && proc.processType.name === "調書作成"))).map((proc) => {
+                              {bridge.processes.filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId).filter((proc) => {
+                                const matchingAssign = bridge.assignments?.find((a) => (a.processTypeId === proc.processType.id) || (a.processTypeId == null && proc.processType.name === "調書作成"));
+                                if (!matchingAssign) return true;
+                                const aStart = matchingAssign.startDate ? new Date(matchingAssign.startDate).toISOString().slice(0, 10) : null;
+                                const pStart = proc.startDate ? new Date(proc.startDate).toISOString().slice(0, 10) : null;
+                                return aStart !== pStart;
+                              }).map((proc) => {
                                 const px = barPx(proc.startDate, proc.endDate);
                                 if (!px) return null;
                                 const procCfg = bridge.processConfigs?.find((c) => c.processTypeId === proc.processType.id);
