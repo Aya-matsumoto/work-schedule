@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const projects = await prisma.project.findMany({
       include: { bridges: { include: { processes: true } } },
-      orderBy: [{ displayOrder: "asc" }, { createdAt: "desc" }],
+      orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
     });
     return NextResponse.json(projects);
   } catch {
