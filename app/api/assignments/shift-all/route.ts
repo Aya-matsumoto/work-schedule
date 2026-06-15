@@ -55,6 +55,23 @@ export async function PUT(req: NextRequest) {
         where: { id: a.id },
         data: { startDate: newStart, endDate: newEnd, isManual: true },
       });
+
+      // 対応する ProcessRecord（iteration=1）も同じ日数ずらす
+      if (a.processTypeId) {
+        const proc = await prisma.processRecord.findFirst({
+          where: { bridgeId: a.bridgeId, processTypeId: a.processTypeId, iteration: 1, staffId: parseInt(staffId) },
+        });
+        if (proc) {
+          const pStart = proc.startDate ? new Date(proc.startDate) : null;
+          const pEnd = proc.endDate ? new Date(proc.endDate) : null;
+          if (pStart) pStart.setDate(pStart.getDate() + days);
+          if (pEnd) pEnd.setDate(pEnd.getDate() + days);
+          await prisma.processRecord.update({
+            where: { id: proc.id },
+            data: { startDate: pStart, endDate: pEnd },
+          });
+        }
+      }
     }
 
     const updated = await prisma.bridgeAssignment.findMany({
