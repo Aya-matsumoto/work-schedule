@@ -64,7 +64,15 @@ export default function BridgeDetailPage() {
       const existing: ProcessRecord[] = bridgeData.processes ?? [];
       const rows: ProcessRecord[] = [];
       for (const pt of (resolvedTypes as ProcessType[])) {
-        const matching = existing.filter((p: ProcessRecord) => p.processTypeId === pt.id);
+        const matching = existing
+          .filter((p: ProcessRecord) => p.processTypeId === pt.id)
+          // 同工程内は着手予定日の昇順で表示（未入力は末尾）
+          .sort((a: ProcessRecord, b: ProcessRecord) => {
+            if (!a.startDate && !b.startDate) return a.iteration - b.iteration;
+            if (!a.startDate) return 1;
+            if (!b.startDate) return -1;
+            return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+          });
         if (matching.length === 0) {
           rows.push({ id: null, processTypeId: pt.id, processType: pt, staffId: null, staffIds: [], status: "NOT_STARTED", startDate: null, endDate: null, completedDate: null, note: null, iteration: 1 });
         } else {
