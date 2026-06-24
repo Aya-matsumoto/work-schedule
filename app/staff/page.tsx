@@ -180,7 +180,8 @@ export default function StaffPage() {
     staffName: string
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const relativeX = e.clientX - rect.left;
+    const scrollLeft = ganttContentRef.current?.scrollLeft ?? 0;
+    const relativeX = e.clientX - rect.left + scrollLeft;
     const dayIndex = Math.floor(relativeX / DAY_WIDTH);
     const { year: sy, month: sm } = parseYearMonth(month);
     const timelineStart = new Date(sy, sm - 1, 1);

@@ -246,15 +246,17 @@ export default function DashboardPage() {
     context: { projectId: number; projectName: string; bridgeId?: number; bridgeName?: string }
   ) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const relativeX = e.clientX - rect.left;
-    const dayFraction = relativeX / rect.width;
-    const dayIndex = Math.floor(dayFraction * daysInMonth);
-    const clickedDate = new Date(year, monthNum - 1, dayIndex + 1);
+    const scrollLeft = ganttContentRef.current?.scrollLeft ?? 0;
+    const relativeX = e.clientX - rect.left + scrollLeft;
+    const dayIndex = Math.floor(relativeX / DAY_WIDTH);
+    const { year: sy, month: sm } = parseYearMonth(month);
+    const timelineStart = new Date(sy, sm - 1, 1);
+    const clickedDate = new Date(timelineStart.getTime() + dayIndex * 86400000);
     const yyyy = clickedDate.getFullYear();
     const mm = String(clickedDate.getMonth() + 1).padStart(2, "0");
     const dd = String(clickedDate.getDate()).padStart(2, "0");
     setCreateTarget({ ...context, initialDate: `${yyyy}-${mm}-${dd}` });
-  }, [year, monthNum, daysInMonth]);
+  }, [month]);
 
   const handleCreateSave = useCallback(async (data: {
     projectId: number;
