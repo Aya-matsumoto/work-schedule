@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
 import MultiStaffSelect from "@/components/MultiStaffSelect";
-import { toInputDate } from "@/lib/utils";
+import { toInputDate, apiFetch } from "@/lib/utils";
 
 interface Staff { id: number; name: string; }
 interface ProcessType { id: number; name: string; order: number; color: string; allowMultipleStaff: boolean; allowAddIteration: boolean; }
@@ -119,7 +119,7 @@ export default function BridgeDetailPage() {
     setSaving(true);
     setMessage(null);
     try {
-      await fetch(`/api/bridges/${params.id}`, {
+      await apiFetch(`/api/bridges/${params.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...bridgeForm, spans: bridgeForm.spans ? parseInt(bridgeForm.spans) : null }),
@@ -129,18 +129,18 @@ export default function BridgeDetailPage() {
         const payload = { processTypeId: row.processTypeId, staffIds: row.staffIds, status: row.status, startDate: row.startDate || null, endDate: row.endDate || null, completedDate: row.completedDate || null, note: row.note || null, iteration: row.iteration };
         if (row.id === null) {
           if (row.staffIds.length > 0 || row.startDate || row.endDate || row.completedDate || row.note) {
-            await fetch(`/api/bridges/${params.id}/processes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+            await apiFetch(`/api/bridges/${params.id}/processes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           }
         } else {
-          await fetch(`/api/processes/${row.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+          await apiFetch(`/api/processes/${row.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         }
       }
       await loadBridgeData(processTypes);
       setIsDirty(false);
       setMessage({ type: "success", text: "保存しました" });
       setTimeout(() => setMessage(null), 3000);
-    } catch {
-      setMessage({ type: "error", text: "保存に失敗しました" });
+    } catch (e) {
+      setMessage({ type: "error", text: e instanceof Error ? e.message : "保存に失敗しました" });
     } finally {
       setSaving(false);
     }

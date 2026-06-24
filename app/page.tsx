@@ -13,7 +13,7 @@ import StatusBadge from "@/components/StatusBadge";
 import {
   formatDate, getDaysInMonth, currentMonth, prevMonth, nextMonth,
   parseYearMonth, getCurrentProcess, getEffectiveStatus,
-  getMonthSequence, calcMultiMonthBar, isWeekend,
+  getMonthSequence, calcMultiMonthBar, isWeekend, apiFetch,
 } from "@/lib/utils";
 
 interface Staff { id: number; name: string; }
@@ -118,6 +118,13 @@ export default function DashboardPage() {
   const [filterTypeId, setFilterTypeId] = useState<number | null>(null);
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
   const [addBridgeProjectId, setAddBridgeProjectId] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // 操作失敗を通知（一定時間で自動消去）
+  const showError = useCallback((e: unknown) => {
+    setErrorMsg(e instanceof Error ? e.message : "操作に失敗しました");
+    setTimeout(() => setErrorMsg(null), 5000);
+  }, []);
 
   // リストビュー用
   const [selectedBridgeIds, setSelectedBridgeIds] = useState<Set<number>>(new Set());
@@ -308,7 +315,7 @@ export default function DashboardPage() {
       const url = data.bridgeId
         ? `/api/bridges/${data.bridgeId}/processes`
         : `/api/projects/${data.projectId}/processes`;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ processTypeId: data.processTypeId, staffIds: data.staffIds, startDate: data.startDate, endDate: data.endDate, note: data.note }),
@@ -331,14 +338,16 @@ export default function DashboardPage() {
             : p.processes,
         })));
       }
-    } catch { loadData(); }
-  }, [processTypes, staff, loadData]);
+    } catch (e) { showError(e); loadData(); }
+  }, [processTypes, staff, loadData, showError]);
 
   const handleBarClick = useCallback((recordId: number, processes: ProcessRecord[], projectName: string, bridgeName: string) => {
+    // 仮ID（負値）はまだ保存処理中。確定前の編集・削除は不整合を招くため抑止する。
+    if (recordId < 0) { showError(new Error("保存処理中です。完了までお待ちください。")); return; }
     const record = processes.find((p) => p.id === recordId);
     if (!record) return;
     setEditTarget({ record, bridgeName, projectName });
-  }, []);
+  }, [showError]);
 
   // 自動割り振りバー クリック → 編集モーダル
   const handleAssignmentBarClick = useCallback((
@@ -364,14 +373,14 @@ export default function DashboardPage() {
       })),
     })));
     try {
-      await fetch(`/api/assignments/${assignmentId}`, {
+      await apiFetch(`/api/assignments/${assignmentId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ startDate: newStart, endDate: newEnd }),
       });
-    } catch { loadData(); }
+    } catch (e) { showError(e); loadData(); }
     finally { setSaving(false); }
-  }, [loadData]);
+  }, [loadData, showError]);
 
   // 割り振り編集モーダル 保存
   const handleAssignmentSave = useCallback(async (data: {
@@ -394,13 +403,13 @@ export default function DashboardPage() {
     })));
     setAssignmentEditTarget(null);
     try {
-      await fetch(`/api/assignments/${data.id}`, {
+      await apiFetch(`/api/assignments/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ staffId: data.staffId, startDate: data.startDate, endDate: data.endDate }),
       });
-    } catch { loadData(); }
-  }, [staff, loadData]);
+    } catch (e) { showError(e); loadData(); }
+  }, [staff, loadData, showError]);
 
   // 割り振り編集モーダル 削除
   const handleAssignmentDelete = useCallback(async (assignmentId: number) => {
@@ -413,11 +422,16 @@ export default function DashboardPage() {
     })));
     setAssignmentEditTarget(null);
     try {
-      await fetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
-    } catch { loadData(); }
-  }, [loadData]);
+      await apiFetch(`/api/assignments/${assignmentId}`, { method: "DELETE" });
+    } catch (e) { showError(e); }
+    // 割り振りと連動削除した ProcessRecord（孤児）の状態を画面に反映するため再取得。
+    // 成否いずれの場合もサーバの状態に合わせ直す。
+    loadData();
+  }, [loadData, showError]);
 
   const handleDragEnd = useCallback(async (recordId: number, newStart: string, newEnd: string) => {
+    // 仮ID（負値）は保存処理中。確定前のドラッグ更新は不整合を招くため抑止し、再取得で位置を戻す。
+    if (recordId < 0) { showError(new Error("保存処理中です。完了までお待ちください。")); loadData(); return; }
     setSaving(true);
     setProjects((prev) => prev.map((p) => ({
       ...p,
@@ -433,21 +447,21 @@ export default function DashboardPage() {
         ...p.bridges.flatMap((b) => b.processes),
       ]);
       const rec = allRecords.find((r) => r.id === recordId);
-      await fetch(`/api/processes/${recordId}`, {
+      await apiFetch(`/api/processes/${recordId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ staffId: rec?.staffId ?? null, startDate: newStart, endDate: newEnd, completedDate: rec?.completedDate ?? null, note: rec?.note ?? null, status: rec?.status ?? "IN_PROGRESS" }),
       });
-    } catch { loadData(); }
+    } catch (e) { showError(e); loadData(); }
     finally { setSaving(false); }
-  }, [projects, loadData]);
+  }, [projects, loadData, showError]);
 
   // 橋梁を追加
   const handleBridgeAdd = useCallback(async (data: { name: string; serialNo: string; spans: string }) => {
     if (!addBridgeProjectId) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/projects/${addBridgeProjectId}/bridges`, {
+      const res = await apiFetch(`/api/projects/${addBridgeProjectId}/bridges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -459,8 +473,9 @@ export default function DashboardPage() {
           : p
       ));
       setAddBridgeProjectId(null);
-    } finally { setSaving(false); }
-  }, [addBridgeProjectId]);
+    } catch (e) { showError(e); }
+    finally { setSaving(false); }
+  }, [addBridgeProjectId, showError]);
 
   // 橋梁を削除（単体）
   const handleBridgeDelete = useCallback(async (bridgeId: number, bridgeName: string) => {
@@ -470,9 +485,9 @@ export default function DashboardPage() {
       bridges: p.bridges.filter((b) => b.id !== bridgeId),
     })));
     try {
-      await fetch(`/api/bridges/${bridgeId}`, { method: "DELETE" });
-    } catch { loadData(); }
-  }, [loadData]);
+      await apiFetch(`/api/bridges/${bridgeId}`, { method: "DELETE" });
+    } catch (e) { showError(e); loadData(); }
+  }, [loadData, showError]);
 
   // 橋梁を一括削除
   const handleBridgeBulkDelete = useCallback(async () => {
@@ -485,9 +500,9 @@ export default function DashboardPage() {
     })));
     setSelectedBridgeIds(new Set());
     try {
-      await Promise.all(idsToDelete.map((id) => fetch(`/api/bridges/${id}`, { method: "DELETE" })));
-    } catch { loadData(); }
-  }, [selectedBridgeIds, loadData]);
+      await Promise.all(idsToDelete.map((id) => apiFetch(`/api/bridges/${id}`, { method: "DELETE" })));
+    } catch (e) { showError(e); loadData(); }
+  }, [selectedBridgeIds, loadData, showError]);
 
   const handleModalSave = useCallback(async (data: {
     id: number; staffIds: number[]; startDate: string | null;
@@ -520,15 +535,18 @@ export default function DashboardPage() {
     })));
     setEditTarget(null);
     try {
-      await fetch(`/api/processes/${data.id}`, {
+      await apiFetch(`/api/processes/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ staffIds: data.staffIds, startDate: data.startDate, endDate: data.endDate, completedDate: data.completedDate, note: data.note, status }),
       });
-    } catch { loadData(); }
-  }, [staff, loadData]);
+    } catch (e) { showError(e); loadData(); }
+  }, [staff, loadData, showError]);
 
   const handleProcessDelete = useCallback(async (processId: number) => {
+    // 仮ID（負値）はまだ保存処理中。確定前に削除すると、進行中の作成が後から
+    // DBへ反映され「削除したのに残る」原因になるため抑止する。
+    if (processId < 0) { showError(new Error("保存処理中です。完了までお待ちください。")); return; }
     setProjects((prev) => prev.map((p) => ({
       ...p,
       processes: p.processes.filter((proc) => proc.id !== processId),
@@ -539,9 +557,9 @@ export default function DashboardPage() {
     })));
     setEditTarget(null);
     try {
-      await fetch(`/api/processes/${processId}`, { method: "DELETE" });
-    } catch { loadData(); }
-  }, [loadData]);
+      await apiFetch(`/api/processes/${processId}`, { method: "DELETE" });
+    } catch (e) { showError(e); loadData(); }
+  }, [loadData, showError]);
 
   // ─── リストビュー用（全業務の橋梁をフラットに） ──────────────────
 
@@ -590,6 +608,15 @@ export default function DashboardPage() {
 
   return (
     <div className="d3-body">
+      {/* エラートースト */}
+      {errorMsg && (
+        <div
+          role="alert"
+          style={{ position: "fixed", top: 16, right: 16, zIndex: 100, background: "#FEE2E2", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", maxWidth: 360 }}
+        >
+          ⚠ {errorMsg}
+        </div>
+      )}
       {/* ヘッダー行 */}
       <div className="d3-headrow">
         <div>

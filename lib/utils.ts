@@ -1,3 +1,22 @@
+// API呼び出しヘルパー：HTTPエラー（4xx/5xx）でも例外を投げる。
+// 素の fetch はネットワーク断のときしか reject しないため、これを通さないと
+// サーバ側で失敗（500等）しても呼び出し側の catch に入らず、
+// 「画面では成功・DBには未反映」という不整合（削除したのに再表示される等）の原因になる。
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init);
+  if (!res.ok) {
+    let message = `操作に失敗しました (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.error) message = data.error;
+    } catch {
+      /* レスポンスがJSONでない場合はデフォルトメッセージを使う */
+    }
+    throw new Error(message);
+  }
+  return res;
+}
+
 // ステータスの表示名
 export const STATUS_LABELS: Record<string, string> = {
   NOT_STARTED: "未着手",

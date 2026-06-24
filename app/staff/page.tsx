@@ -6,7 +6,7 @@ import StaffProcessCreateModal from "@/components/StaffProcessCreateModal";
 import ProcessEditModal from "@/components/ProcessEditModal";
 import {
   currentMonth, prevMonth, nextMonth, parseYearMonth,
-  getDaysInMonth, getMonthSequence, calcMultiMonthBar, isWeekend,
+  getDaysInMonth, getMonthSequence, calcMultiMonthBar, isWeekend, apiFetch,
 } from "@/lib/utils";
 
 interface ProcessRecord {
@@ -73,6 +73,13 @@ export default function StaffPage() {
   const [holidays, setHolidays] = useState<string[]>([]);
   const [selectedStaffIds, setSelectedStaffIds] = useState<number[]>([]);
   const [staffFilterOpen, setStaffFilterOpen] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // 操作失敗を通知（一定時間で自動消去）
+  const showError = useCallback((e: unknown) => {
+    setErrorMsg(e instanceof Error ? e.message : "操作に失敗しました");
+    setTimeout(() => setErrorMsg(null), 5000);
+  }, []);
 
   const ganttContentRef = useRef<HTMLDivElement>(null);
   const ganttScrollbarRef = useRef<HTMLDivElement>(null);
@@ -206,7 +213,7 @@ export default function StaffPage() {
       const url = data.bridgeId
         ? `/api/bridges/${data.bridgeId}/processes`
         : `/api/projects/${data.projectId}/processes`;
-      await fetch(url, {
+      await apiFetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -218,8 +225,8 @@ export default function StaffPage() {
         }),
       });
       loadSchedule();
-    } catch { loadSchedule(); }
-  }, [loadSchedule]);
+    } catch (e) { showError(e); loadSchedule(); }
+  }, [loadSchedule, showError]);
 
   // 工程バークリック → 編集
   const handleProcessBarClick = useCallback((recordId: number) => {
@@ -248,7 +255,7 @@ export default function StaffPage() {
       const staffIds = rec?.staffMembers && rec.staffMembers.length > 0
         ? rec.staffMembers.map((sm) => sm.staffId)
         : rec?.staffId ? [rec.staffId] : [];
-      await fetch(`/api/processes/${recordId}`, {
+      await apiFetch(`/api/processes/${recordId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -258,8 +265,8 @@ export default function StaffPage() {
           status: rec?.status ?? "IN_PROGRESS",
         }),
       });
-    } catch { loadSchedule(); }
-  }, [staffList, loadSchedule]);
+    } catch (e) { showError(e); loadSchedule(); }
+  }, [staffList, loadSchedule, showError]);
 
   // 工程編集モーダル保存
   const handleProcessSave = useCallback(async (data: {
@@ -270,14 +277,14 @@ export default function StaffPage() {
     setEditTarget(null);
     const status = data.completedDate ? "COMPLETED" : data.startDate ? "IN_PROGRESS" : "NOT_STARTED";
     try {
-      await fetch(`/api/processes/${data.id}`, {
+      await apiFetch(`/api/processes/${data.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ staffIds: data.staffIds, startDate: data.startDate, endDate: data.endDate, completedDate: data.completedDate, note: data.note, status }),
       });
       loadSchedule();
-    } catch { loadSchedule(); }
-  }, [loadSchedule]);
+    } catch (e) { showError(e); loadSchedule(); }
+  }, [loadSchedule, showError]);
 
   function isAvailable(s: StaffWithSchedule): boolean {
     if (!checkDate) return false;
@@ -297,6 +304,15 @@ export default function StaffPage() {
 
   return (
     <div className="d3-body">
+      {/* エラートースト */}
+      {errorMsg && (
+        <div
+          role="alert"
+          style={{ position: "fixed", top: 16, right: 16, zIndex: 100, background: "#FEE2E2", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: 8, padding: "10px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", maxWidth: 360 }}
+        >
+          ⚠ {errorMsg}
+        </div>
+      )}
       <div className="d3-headrow">
         <div>
           <h1 className="d3-h1">担当者<span className="em">稼働状況</span></h1>
