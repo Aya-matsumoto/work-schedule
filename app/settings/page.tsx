@@ -219,26 +219,48 @@ export default function SettingsPage() {
     const formatD = (d: string | null | undefined) =>
       d ? new Date(d).toISOString().slice(0, 10) : "";
 
-    const ptCols = pts.flatMap((pt: any) => [
-      `${pt.name}_担当者`, `${pt.name}_開始日`, `${pt.name}_終了日`, `${pt.name}_ステータス`,
-    ]);
+    // 反復番号 → 丸数字（1→"", 2→"②", 3→"③"…）
+    const iterMark = (n: number) => (n <= 1 ? "" : String.fromCharCode(0x2460 + n - 1));
+
+    // 工程種別ごとの最大反復数を算出（複数入力に対応）
+    const maxIter = new Map<number, number>();
+    for (const b of bridges) {
+      for (const pt of pts) {
+        const cnt = (b.processes ?? []).filter((p: any) => p.processType?.id === pt.id).length;
+        if (cnt > (maxIter.get(pt.id) ?? 0)) maxIter.set(pt.id, cnt);
+      }
+    }
+
+    const ptCols = pts.flatMap((pt: any) => {
+      const mi = Math.max(1, maxIter.get(pt.id) ?? 1);
+      const cols: string[] = [];
+      for (let it = 1; it <= mi; it++) {
+        const sfx = iterMark(it);
+        cols.push(`${pt.name}${sfx}_担当者`, `${pt.name}${sfx}_開始日`, `${pt.name}${sfx}_終了日`, `${pt.name}${sfx}_ステータス`);
+      }
+      return cols;
+    });
     const header = ["業務名", "元請け", "橋梁名", "整理番号", ...ptCols].join(",");
 
     const rows = bridges.map((b) => {
       const cells = pts.flatMap((pt: any) => {
-        // iteration=1 の最新レコードを使用
+        const mi = Math.max(1, maxIter.get(pt.id) ?? 1);
         const procs: any[] = (b.processes ?? []).filter((p: any) => p.processType?.id === pt.id);
-        const proc = procs.find((p: any) => p.iteration === 1) ?? procs[0] ?? null;
-        if (!proc) return ["", "", "", ""];
-        const staffNames = proc.staffMembers && proc.staffMembers.length > 0
-          ? proc.staffMembers.map((sm: any) => sm.staff.name).join("・")
-          : proc.staff?.name ?? "";
-        return [
-          staffNames,
-          formatD(proc.startDate),
-          formatD(proc.endDate),
-          statusLabel(proc.status ?? "NOT_STARTED"),
-        ];
+        const out: string[] = [];
+        for (let it = 1; it <= mi; it++) {
+          const proc = procs.find((p: any) => p.iteration === it) ?? null;
+          if (!proc) { out.push("", "", "", ""); continue; }
+          const staffNames = proc.staffMembers && proc.staffMembers.length > 0
+            ? proc.staffMembers.map((sm: any) => sm.staff.name).join("・")
+            : proc.staff?.name ?? "";
+          out.push(
+            staffNames,
+            formatD(proc.startDate),
+            formatD(proc.endDate),
+            statusLabel(proc.status ?? "NOT_STARTED"),
+          );
+        }
+        return out;
       });
       return [project.name, project.client ?? "", b.name, b.serialNo ?? "", ...cells]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)

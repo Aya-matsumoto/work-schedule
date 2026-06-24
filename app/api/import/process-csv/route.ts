@@ -23,6 +23,14 @@ function parseStatus(s: string): string {
   return "NOT_STARTED";
 }
 
+// 工程名の末尾の丸数字（②③…）を反復番号として分離
+// 例：「修正②」→ { base: "修正", iteration: 2 }、「調書作成」→ { base, iteration: 1 }
+function parseIteration(raw: string): { base: string; iteration: number } {
+  const m = raw.match(/^(.*?)([①-⑳])$/);
+  if (m) return { base: m[1], iteration: m[2].charCodeAt(0) - 0x2460 + 1 };
+  return { base: raw, iteration: 1 };
+}
+
 // POST /api/import/process-csv
 export async function POST(req: NextRequest) {
   try {
@@ -82,7 +90,8 @@ export async function POST(req: NextRequest) {
       }
 
       for (const ptName of ptNames) {
-        const ptId = ptMap.get(ptName);
+        const { base, iteration } = parseIteration(ptName);
+        const ptId = ptMap.get(base);
         if (!ptId) continue;
 
         const staffRaw: string = row[`${ptName}_担当者`] ?? "";
@@ -107,9 +116,9 @@ export async function POST(req: NextRequest) {
 
         const primaryStaffId = staffIds[0] ?? null;
 
-        // 既存の ProcessRecord（iteration=1）を探す
+        // 既存の ProcessRecord（同一反復番号）を探す
         const existing = await prisma.processRecord.findFirst({
-          where: { bridgeId: bridge.id, processTypeId: ptId, iteration: 1 },
+          where: { bridgeId: bridge.id, processTypeId: ptId, iteration },
         });
 
         if (existing) {
@@ -147,7 +156,7 @@ export async function POST(req: NextRequest) {
               endDate,
               status,
               completedDate: status === "COMPLETED" ? endDate : null,
-              iteration: 1,
+              iteration,
             },
           });
           if (staffIds.length > 0) {
