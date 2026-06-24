@@ -41,6 +41,20 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         });
       }
 
+      // 対の割り振り(BridgeAssignment)があれば日程・担当を同期し、ガント表示とのズレを防ぐ。
+      // （割り振りは同橋梁・同工程種別に存在。iteration:1 の工程レコードと対応）
+      if (updated.bridgeId != null && updated.iteration === 1) {
+        await tx.bridgeAssignment.updateMany({
+          where: { bridgeId: updated.bridgeId, processTypeId: updated.processTypeId },
+          data: {
+            startDate: updated.startDate,
+            endDate: updated.endDate,
+            staffId: primaryStaffId ?? undefined,
+            isManual: true,
+          },
+        });
+      }
+
       return tx.processRecord.findUnique({
         where: { id: recordId },
         include: {
@@ -59,7 +73,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await prisma.processRecord.delete({ where: { id: parseInt(params.id) } });
+    const id = parseInt(params.id);
+    await prisma.$transaction(async (tx) => {
+      const rec = await tx.processRecord.findUnique({ where: { id } });
+      await tx.processRecord.delete({ where: { id } }); // ProcessRecordStaff は onDelete:Cascade で消える
+      // 対の割り振りも連動削除（残すとガントに割り振りバーが復活して見えるため）
+      if (rec && rec.bridgeId != null && rec.iteration === 1) {
+        await tx.bridgeAssignment.deleteMany({
+          where: { bridgeId: rec.bridgeId, processTypeId: rec.processTypeId },
+        });
+      }
+    });
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "削除失敗" }, { status: 500 });
