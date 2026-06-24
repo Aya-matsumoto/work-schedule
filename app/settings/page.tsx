@@ -242,13 +242,24 @@ export default function SettingsPage() {
     });
     const header = ["業務名", "元請け", "橋梁名", "整理番号", ...ptCols].join(",");
 
+    // 同工程内を着手予定日の昇順で並べ替え（未入力は末尾）。詳細画面の表示順と一致させる
+    const sortByStart = (a: any, b: any) => {
+      if (!a.startDate && !b.startDate) return (a.iteration ?? 1) - (b.iteration ?? 1);
+      if (!a.startDate) return 1;
+      if (!b.startDate) return -1;
+      return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+    };
+
     const rows = bridges.map((b) => {
       const cells = pts.flatMap((pt: any) => {
         const mi = Math.max(1, maxIter.get(pt.id) ?? 1);
-        const procs: any[] = (b.processes ?? []).filter((p: any) => p.processType?.id === pt.id);
+        const procs: any[] = (b.processes ?? [])
+          .filter((p: any) => p.processType?.id === pt.id)
+          .sort(sortByStart);
         const out: string[] = [];
         for (let it = 1; it <= mi; it++) {
-          const proc = procs.find((p: any) => p.iteration === it) ?? null;
+          // iteration 値に依存せず、日付順の位置で列に割り当てる
+          const proc = procs[it - 1] ?? null;
           if (!proc) { out.push("", "", "", ""); continue; }
           const staffNames = proc.staffMembers && proc.staffMembers.length > 0
             ? proc.staffMembers.map((sm: any) => sm.staff.name).join("・")

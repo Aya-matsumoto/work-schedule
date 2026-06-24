@@ -217,7 +217,7 @@ export default function BridgeDetailPage() {
               <tr key={`${row.processTypeId}-${row.iteration}-${idx}`} className="border-b border-gray-100">
                 <td className="px-4 py-2">
                   <span className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white" style={{ backgroundColor: row.processType.color }}>
-                    {row.processType.name}{row.iteration > 1 ? `②` : ""}
+                    {row.processType.name}{row.iteration > 1 ? String.fromCharCode(0x2460 + row.iteration - 1) : ""}
                   </span>
                 </td>
                 <td className="px-4 py-2">
