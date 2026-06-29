@@ -790,7 +790,7 @@ export default function DashboardPage() {
 
                               {/* 点検完了日の旗マーク */}
                               {(() => {
-                                const inspDate = bridge.assignments?.find((a) => a.inspectionDoneDate)?.inspectionDoneDate;
+                                const inspDate = bridge.inspectionDate ?? bridge.assignments?.find((a) => a.inspectionDoneDate)?.inspectionDoneDate;
                                 const left = flagPx(inspDate);
                                 if (left == null) return null;
                                 return (
