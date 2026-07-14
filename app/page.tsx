@@ -15,6 +15,7 @@ import {
   parseYearMonth, getCurrentProcess, getEffectiveStatus,
   getMonthSequence, calcMultiMonthBar, isWeekend, apiFetch,
 } from "@/lib/utils";
+import { getMasterData } from "@/lib/masterDataCache";
 
 interface Staff { id: number; name: string; }
 
@@ -198,9 +199,8 @@ export default function DashboardPage() {
     Promise.all([
       fetch(`/api/gantt/dashboard?month=${month}`).then((r) => r.json()),
       fetch("/api/staff").then((r) => r.json()),
-      fetch("/api/process-types").then((r) => r.json()),
-      fetch("/api/holidays").then((r) => r.json()),
-    ]).then(([projectsData, staffData, typesData, holidaysData]) => {
+      getMasterData(),
+    ]).then(([projectsData, staffData, { processTypes: typesData, holidays: holidaysData }]) => {
       setProjects(Array.isArray(projectsData) ? projectsData : []);
       setStaff(Array.isArray(staffData) ? staffData : []);
       setProcessTypes(Array.isArray(typesData) ? [...typesData].sort((a: ProcessType, b: ProcessType) => a.order - b.order) : []);

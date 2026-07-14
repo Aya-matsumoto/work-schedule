@@ -41,6 +41,8 @@ model Bridge {
   processConfigs   BridgeProcessConfig[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+
+  @@index([projectId])
 }
 
 // 担当者
@@ -120,6 +122,12 @@ model ProcessRecord {
   iteration     Int                  @default(1)
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
+
+  @@index([bridgeId])
+  @@index([projectId])
+  @@index([processTypeId])
+  @@index([staffId])
+  @@index([startDate, endDate])
 }
 
 // 工程レコード担当者（複数担当者対応）
@@ -131,6 +139,7 @@ model ProcessRecordStaff {
   staff           Staff         @relation(fields: [staffId], references: [id])
 
   @@unique([processRecordId, staffId])
+  @@index([staffId])
 }
 
 // 担当者シフト・勤務時間
@@ -145,6 +154,8 @@ model StaffShift {
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   overrides          StaffShiftOverride[]
+
+  @@index([staffId])
 }
 
 // 勤務時間の個別変更
@@ -156,6 +167,8 @@ model StaffShiftOverride {
   hoursPerDay Float
   note        String?
   createdAt   DateTime   @default(now())
+
+  @@index([shiftId])
 }
 
 // システム設定
@@ -184,6 +197,11 @@ model BridgeAssignment {
   isManual           Boolean      @default(false)
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+
+  @@index([bridgeId])
+  @@index([staffId])
+  @@index([processTypeId])
+  @@index([startDate, endDate])
 }
 
 // 会社公休日
@@ -208,4 +226,5 @@ model BridgeProcessConfig {
   updatedAt       DateTime     @updatedAt
 
   @@unique([bridgeId, processTypeId])
+  @@index([processTypeId])
 }

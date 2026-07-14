@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { STAFF_TYPE_LABELS, toInputDate } from "@/lib/utils";
+import { invalidateMasterData } from "@/lib/masterDataCache";
 
 interface Project { id: number; name: string; client: string | null; fiscalYear: string | null; deadline: string | null; note: string | null; displayOrder: number; }
 interface Staff { id: number; name: string; type: string; color: string; }
@@ -40,6 +41,7 @@ export default function SettingsPage() {
   };
 
   const reload = async () => {
+    invalidateMasterData();
     const [p, s, pt, hol] = await Promise.all([
       fetch("/api/projects").then((r) => r.json()),
       fetch("/api/staff").then((r) => r.json()),

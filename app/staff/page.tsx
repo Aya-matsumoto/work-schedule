@@ -8,6 +8,7 @@ import {
   currentMonth, prevMonth, nextMonth, parseYearMonth,
   getDaysInMonth, getMonthSequence, calcMultiMonthBar, isWeekend, apiFetch,
 } from "@/lib/utils";
+import { getMasterData } from "@/lib/masterDataCache";
 
 interface ProcessRecord {
   id: number;
@@ -162,9 +163,8 @@ export default function StaffPage() {
   useEffect(() => {
     Promise.all([
       fetch(`/api/gantt/dashboard?month=${month}`).then((r) => r.json()),
-      fetch("/api/process-types").then((r) => r.json()),
-      fetch("/api/holidays").then((r) => r.json()),
-    ]).then(([projectsData, typesData, holidaysData]) => {
+      getMasterData(),
+    ]).then(([projectsData, { processTypes: typesData, holidays: holidaysData }]) => {
       if (Array.isArray(projectsData)) {
         setProjects(projectsData.map((p: any) => ({
           id: p.id, name: p.name,
