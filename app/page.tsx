@@ -567,16 +567,29 @@ export default function DashboardPage() {
   const allBridges: BridgeRow[] = projects.flatMap((p) =>
     p.bridges.map((b) => ({ ...b, projectName: p.name, projectId: p.id }))
   );
-  const staffNames = [...new Set(allBridges.flatMap((b) => b.processes.map((p) => p.staff?.name)).filter(Boolean))] as string[];
+  const staffNames = [...new Set(allBridges.flatMap((b) => b.processes.flatMap((p) => {
+    if (p.staffMembers && p.staffMembers.length > 0) return p.staffMembers.map((sm) => sm.staff.name);
+    return p.staff?.name ? [p.staff.name] : [];
+  })))] as string[];
   const processNames = [...new Set(allBridges.flatMap((b) => b.processes.map((p) => p.processType.name)))];
 
   const filteredBridges = allBridges.filter((bridge) => {
     if (searchText && !bridge.name.includes(searchText) && !(bridge.serialNo ?? "").includes(searchText) && !bridge.projectName.includes(searchText)) return false;
-    const currentProcessName = getCurrentProcess(bridge.processes);
-    if (filterProcess && currentProcessName !== filterProcess) return false;
-    if (filterStaff) {
-      if (!bridge.processes.some((p) => p.staff?.name === filterStaff)) return false;
+
+    const hasStaff = (p: ProcessRecord, name: string) =>
+      p.staffMembers && p.staffMembers.length > 0
+        ? p.staffMembers.some((sm) => sm.staff.name === name)
+        : p.staff?.name === name;
+
+    if (filterProcess && filterStaff) {
+      // 担当者と工程の両方が指定されたとき：その担当者がその工程に入っているものだけ表示
+      if (!bridge.processes.some((p) => p.processType.name === filterProcess && hasStaff(p, filterStaff))) return false;
+    } else if (filterProcess) {
+      if (!bridge.processes.some((p) => p.processType.name === filterProcess)) return false;
+    } else if (filterStaff) {
+      if (!bridge.processes.some((p) => hasStaff(p, filterStaff))) return false;
     }
+
     if (filterStatus) {
       if (calcOverallStatus(bridge.processes) !== filterStatus) return false;
     }
@@ -790,7 +803,7 @@ export default function DashboardPage() {
 
                               {/* 点検完了日の旗マーク */}
                               {(() => {
-                                const inspDate = bridge.assignments?.find((a) => a.inspectionDoneDate)?.inspectionDoneDate;
+                                const inspDate = bridge.inspectionDate ?? bridge.assignments?.find((a) => a.inspectionDoneDate)?.inspectionDoneDate;
                                 const left = flagPx(inspDate);
                                 if (left == null) return null;
                                 return (
@@ -852,7 +865,7 @@ export default function DashboardPage() {
               </select>
             </div>
             <div>
-              <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>現在工程</label>
+              <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", marginBottom: 6 }}>工程</label>
               <select value={filterProcess} onChange={(e) => setFilterProcess(e.target.value)} className="d3-input" style={{ width: "auto" }}>
                 <option value="">すべて</option>
                 {processNames.map((p) => <option key={p} value={p}>{p}</option>)}
