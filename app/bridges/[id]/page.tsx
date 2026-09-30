@@ -115,12 +115,16 @@ export default function BridgeDetailPage() {
     setIsDirty(true);
   }, []);
 
-  // ＋で追加した行（iteration > 1）を削除する。未保存の行は画面から消すだけ、保存済みの行はDBからも削除する。
+  // 工程行を削除する。未保存の行は画面から消すだけ、保存済みの行はDBからも削除する。
   // 他の行の未保存の入力を失わないよう、再読み込みはせずローカルの状態から取り除く。
   const deleteRevisionRow = async (index: number) => {
     const row = formProcesses[index];
-    const label = `${row.processType.name}${String.fromCharCode(0x2460 + row.iteration - 1)}`;
-    if (!confirm(`「${label}」の行を削除しますか？${row.id !== null ? "\n（保存済みのデータも削除され、元に戻せません）" : ""}`)) return;
+    const label = `${row.processType.name}${row.iteration > 1 ? String.fromCharCode(0x2460 + row.iteration - 1) : ""}`;
+    const warnings = [
+      row.id !== null ? "保存済みのデータも削除され、元に戻せません" : "",
+      row.id !== null && row.iteration === 1 ? "ガントの割り振りバーも一緒に削除されます" : "",
+    ].filter(Boolean).map((w) => `\n・${w}`).join("");
+    if (!confirm(`「${label}」の行を削除しますか？${warnings}`)) return;
     if (row.id !== null) {
       try {
         await apiFetch(`/api/processes/${row.id}`, { method: "DELETE" });
@@ -129,7 +133,21 @@ export default function BridgeDetailPage() {
         return;
       }
     }
-    setFormProcesses((prev) => prev.filter((_, i) => i !== index));
+    setFormProcesses((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // サーバーと同じ規則で番号を詰め直す（保存済みを先に番号順、その後に未保存の行）
+      const same = next.filter((p) => p.processTypeId === row.processTypeId);
+      const ordered = [...same].sort((a, b) => (a.id === null ? 1 : 0) - (b.id === null ? 1 : 0) || a.iteration - b.iteration);
+      const renumbered = next.map((p) => {
+        const pos = ordered.indexOf(p);
+        return pos >= 0 && p.iteration !== pos + 1 ? { ...p, iteration: pos + 1 } : p;
+      });
+      // その工程の行が無くなったら、空の入力行を元の位置に戻す
+      if (same.length === 0) {
+        renumbered.splice(index, 0, { id: null, processTypeId: row.processTypeId, processType: row.processType, staffId: null, staffIds: [], status: "NOT_STARTED", startDate: null, endDate: null, completedDate: null, note: null, iteration: 1 });
+      }
+      return renumbered;
+    });
     setMessage({ type: "success", text: "行を削除しました" });
     setTimeout(() => setMessage(null), 3000);
   };
@@ -273,7 +291,7 @@ export default function BridgeDetailPage() {
                   {row.processType.allowAddIteration && (
                     <button onClick={() => addRevisionRow(row.processTypeId, row.processType)} className="text-blue-500 hover:text-blue-700 text-xs" title="追加">＋</button>
                   )}
-                  {row.iteration > 1 && (
+                  {(row.iteration > 1 || row.id !== null) && (
                     <button onClick={() => deleteRevisionRow(idx)} className="text-red-400 hover:text-red-600 text-xs ml-2" title="この行を削除">×</button>
                   )}
                 </td>

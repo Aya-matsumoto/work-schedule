@@ -83,6 +83,18 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
           where: { bridgeId: rec.bridgeId, processTypeId: rec.processTypeId },
         });
       }
+      // 残った同橋梁・同工程のレコードの番号を①②…と詰め直す（①を消して②だけ残る、といった歯抜けを防ぐ）
+      if (rec && rec.bridgeId != null) {
+        const rest = await tx.processRecord.findMany({
+          where: { bridgeId: rec.bridgeId, processTypeId: rec.processTypeId },
+          orderBy: [{ iteration: "asc" }, { id: "asc" }],
+        });
+        for (let i = 0; i < rest.length; i++) {
+          if (rest[i].iteration !== i + 1) {
+            await tx.processRecord.update({ where: { id: rest[i].id }, data: { iteration: i + 1 } });
+          }
+        }
+      }
     });
     return NextResponse.json({ success: true });
   } catch {
