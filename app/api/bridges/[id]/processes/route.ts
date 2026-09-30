@@ -14,10 +14,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const primaryStaffId = ids.length > 0 ? ids[0] : null;
 
+    const bridgeId = parseInt(params.id);
+
     const record = await prisma.$transaction(async (tx) => {
+      // iteration 未指定（ダッシュボードからの登録など）の場合は、同橋梁・同工程の既存件数に続く番号を振る。
+      // 常に1で登録すると「調書作成」が重複し、2件目がガントに出ない・詳細画面から削除できない不具合になるため。
+      let effectiveIteration: number = iteration ?? 1;
+      if (iteration == null) {
+        const agg = await tx.processRecord.aggregate({
+          where: { bridgeId, processTypeId: parseInt(processTypeId) },
+          _max: { iteration: true },
+        });
+        effectiveIteration = (agg._max.iteration ?? 0) + 1;
+      }
+
       const created = await tx.processRecord.create({
         data: {
-          bridgeId: parseInt(params.id),
+          bridgeId,
           processTypeId: parseInt(processTypeId),
           staffId: primaryStaffId,
           status: effectiveStatus,
@@ -25,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           endDate: endDate ? new Date(endDate) : null,
           completedDate: completedDate ? new Date(completedDate) : null,
           note,
-          iteration: iteration ?? 1,
+          iteration: effectiveIteration,
         },
       });
 

@@ -31,6 +31,7 @@ interface ProcessRecord {
   staff: { id: number; name: string } | null;
   staffMembers?: { staffId: number; staff: { id: number; name: string } }[];
   processType: { id: number; name: string; order: number; color: string };
+  iteration?: number;
 }
 
 interface BridgeAssignment {
@@ -293,6 +294,11 @@ export default function DashboardPage() {
       staff: staffMember,
       staffMembers: staffMembersTemp,
       processType,
+      // サーバーと同じ規則で仮の番号を振る（保存後にサーバーの値で上書き）
+      iteration: data.bridgeId
+        ? Math.max(0, ...(projects.flatMap((p) => p.bridges).find((b) => b.id === data.bridgeId)?.processes ?? [])
+            .filter((p) => p.processTypeId === data.processTypeId).map((p) => p.iteration ?? 1)) + 1
+        : 1,
     };
 
     // 即座に画面に追加
@@ -327,7 +333,7 @@ export default function DashboardPage() {
           ...p,
           bridges: p.bridges.map((b) => ({
             ...b,
-            processes: b.processes.map((proc) => proc.id === tempId ? { ...proc, id: created.id } : proc),
+            processes: b.processes.map((proc) => proc.id === tempId ? { ...proc, id: created.id, iteration: created.iteration } : proc),
           })),
         })));
       } else {
@@ -826,11 +832,11 @@ export default function DashboardPage() {
                                 return <GanttBar key={`assign-${a.id}`} id={a.id} startDate={a.startDate} endDate={a.endDate} color={ptColor} staffName={a.staff.name} processName={a.processType?.name ?? "調書作成"} customLabel={a.isManual ? `${a.staff.name} ✏` : `${a.staff.name} 📋`} requiredHours={cfg?.requiredHours ?? null} year={year} month={monthNum} pixelLeft={px.left} pixelWidth={px.width} dayWidth={DAY_WIDTH} onDragEnd={(aid, ns, ne) => handleAssignmentDragEnd(aid, ns, ne)} onClick={(aid) => handleAssignmentBarClick(aid, bridge, selectedProject.name)} />;
                               })}
 
-                              {bridge.processes.filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId).filter((proc) => !bridge.assignments?.some((a) => (a.processTypeId === proc.processType.id) || (a.processTypeId == null && proc.processType.name === "調書作成"))).map((proc) => {
+                              {bridge.processes.filter((proc) => filterTypeId === null || proc.processType.id === filterTypeId).filter((proc) => (proc.iteration ?? 1) > 1 || !bridge.assignments?.some((a) => (a.processTypeId === proc.processType.id) || (a.processTypeId == null && proc.processType.name === "調書作成"))).map((proc) => {
                                 const px = barPx(proc.startDate, proc.endDate);
                                 if (!px) return null;
                                 const procCfg = bridge.processConfigs?.find((c) => c.processTypeId === proc.processType.id);
-                                return <GanttBar key={proc.id} id={proc.id} startDate={proc.startDate} endDate={proc.endDate} completedDate={proc.completedDate} color={proc.processType.color} staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)} processName={proc.processType.name} requiredHours={procCfg?.requiredHours ?? null} year={year} month={monthNum} pixelLeft={px.left} pixelWidth={px.width} dayWidth={DAY_WIDTH} onDragEnd={handleDragEnd} onClick={(rid) => handleBarClick(rid, bridge.processes, selectedProject.name, bridge.name)} />;
+                                return <GanttBar key={proc.id} id={proc.id} startDate={proc.startDate} endDate={proc.endDate} completedDate={proc.completedDate} color={proc.processType.color} staffName={proc.staffMembers && proc.staffMembers.length > 0 ? proc.staffMembers.map((sm) => sm.staff.name).join("・") : (proc.staff?.name ?? null)} processName={`${proc.processType.name}${(proc.iteration ?? 1) > 1 ? String.fromCharCode(0x2460 + (proc.iteration ?? 1) - 1) : ""}`} requiredHours={procCfg?.requiredHours ?? null} year={year} month={monthNum} pixelLeft={px.left} pixelWidth={px.width} dayWidth={DAY_WIDTH} onDragEnd={handleDragEnd} onClick={(rid) => handleBarClick(rid, bridge.processes, selectedProject.name, bridge.name)} />;
                               })}
                             </div>
                           </div>
