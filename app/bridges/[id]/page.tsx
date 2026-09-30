@@ -115,6 +115,25 @@ export default function BridgeDetailPage() {
     setIsDirty(true);
   }, []);
 
+  // ＋で追加した行（iteration > 1）を削除する。未保存の行は画面から消すだけ、保存済みの行はDBからも削除する。
+  // 他の行の未保存の入力を失わないよう、再読み込みはせずローカルの状態から取り除く。
+  const deleteRevisionRow = async (index: number) => {
+    const row = formProcesses[index];
+    const label = `${row.processType.name}${String.fromCharCode(0x2460 + row.iteration - 1)}`;
+    if (!confirm(`「${label}」の行を削除しますか？${row.id !== null ? "\n（保存済みのデータも削除され、元に戻せません）" : ""}`)) return;
+    if (row.id !== null) {
+      try {
+        await apiFetch(`/api/processes/${row.id}`, { method: "DELETE" });
+      } catch (e) {
+        setMessage({ type: "error", text: e instanceof Error ? e.message : "削除に失敗しました" });
+        return;
+      }
+    }
+    setFormProcesses((prev) => prev.filter((_, i) => i !== index));
+    setMessage({ type: "success", text: "行を削除しました" });
+    setTimeout(() => setMessage(null), 3000);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setMessage(null);
@@ -250,9 +269,12 @@ export default function BridgeDetailPage() {
                 <td className="px-4 py-2">
                   <input type="text" value={row.note ?? ""} onChange={(e) => handleProcessChange(idx, "note", e.target.value || null)} placeholder="備考" className="border border-gray-300 rounded px-2 py-1 text-sm w-full" />
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2 whitespace-nowrap">
                   {row.processType.allowAddIteration && (
                     <button onClick={() => addRevisionRow(row.processTypeId, row.processType)} className="text-blue-500 hover:text-blue-700 text-xs" title="追加">＋</button>
+                  )}
+                  {row.iteration > 1 && (
+                    <button onClick={() => deleteRevisionRow(idx)} className="text-red-400 hover:text-red-600 text-xs ml-2" title="この行を削除">×</button>
                   )}
                 </td>
               </tr>
